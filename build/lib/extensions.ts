@@ -461,6 +461,29 @@ function doPackageLocalExtensionsStream(forWeb: boolean, native: boolean): Strea
 }
 
 /**
+ * `.moduleignore` drops `@github/copilot` from every `node_modules` tree because
+ * the agent host loads the Copilot runtime bundled in `@github/copilot-sdk`. The
+ * built-in copilot extension is the exception: it runs the CLI from its own
+ * pinned `@github/copilot` copy, which `prepareBuiltInCopilotRipgrepShim`
+ * expects at `extensions/copilot/node_modules/@github/copilot/sdk`. Keeping the
+ * rule would strip the extension down to an empty directory and fail packaging.
+ */
+const builtInCopilotModuleRules = new Set(['@github/copilot/**']);
+
+/**
+ * `patchWin32Dependencies` runs rcedit over every shipped `*.node`, and rcedit
+ * fails outright on a binary it cannot load. `@github/copilot` keeps one variant per
+ * host in a single tree (`@teddyzhu/clipboard` ships darwin, linux and win32 arm64
+ * next to the win32 x64 one), so drop the foreign addons here and let packaging
+ * materialize the natives for the target platform.
+ */
+const builtInCopilotForeignNativeExcludes = [
+	'!**/node_modules/@github/copilot/**/@teddyzhu/clipboard/clipboard.darwin-*.node',
+	'!**/node_modules/@github/copilot/**/@teddyzhu/clipboard/clipboard.linux-*.node',
+	'!**/node_modules/@github/copilot/**/@teddyzhu/clipboard/clipboard.win32-arm64.node',
+];
+
+/**
  * Package the built-in copilot extension specifically.
  * This is used by non-CI local builds where copilot is not downloaded as a VSIX
  * but must be compiled from source and included in the build.
@@ -482,8 +505,9 @@ export function packageCopilotExtensionStream(): Stream {
 	return es.merge(
 		localExtensionsStream,
 		gulp.src(dependenciesSrc, { base: '.' })
-			.pipe(util2.cleanNodeModules(path.join(root, 'build', '.moduleignore')))
+			.pipe(util2.cleanNodeModules(path.join(root, 'build', '.moduleignore'), builtInCopilotModuleRules))
 			.pipe(util2.cleanNodeModules(path.join(root, 'build', `.moduleignore.${process.platform}`)))
+			.pipe(filter(['**', ...builtInCopilotForeignNativeExcludes]))
 	).pipe(util2.setExecutableBit(['**/*.sh']));
 }
 

@@ -169,11 +169,18 @@ export function skipDirectories(): NodeJS.ReadWriteStream {
 	});
 }
 
-export function cleanNodeModules(rulePath: string): NodeJS.ReadWriteStream {
+/**
+ * Streams files through the `.moduleignore` rules in `rulePath`.
+ *
+ * @param keepRules Rule lines a caller needs to survive the strip, spelled exactly
+ * as in `rulePath`. Use this when a `node_modules` tree is packaged separately and
+ * still needs a package that the shared rules drop from every tree.
+ */
+export function cleanNodeModules(rulePath: string, keepRules: ReadonlySet<string> = new Set()): NodeJS.ReadWriteStream {
 	const rules = fs.readFileSync(rulePath, 'utf8')
 		.split(/\r?\n/g)
 		.map(line => line.trim())
-		.filter(line => line && !/^#/.test(line));
+		.filter(line => line && !/^#/.test(line) && !keepRules.has(line));
 
 	const excludes = rules.filter(line => !/^!/.test(line)).map(line => `!**/node_modules/${line}`);
 	const includes = rules.filter(line => /^!/.test(line)).map(line => `**/node_modules/${line.substr(1)}`);
