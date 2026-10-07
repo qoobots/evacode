@@ -13,7 +13,7 @@
 |---|---|
 | **CC Switch 无法直接接管 evacode** | 它的 10 个宿主工具里没有编辑器，不写 `settings.json` / `chatLanguageModels.json` |
 | **evacode 无需安装任何插件** | Copilot、Codex、Claude 三套 AI 集成**全部内置**，装 marketplace 扩展是冗余的 |
-| **最快可用路径：内置 Copilot + BYOK `customendpoint`** | 零源码改造，写一个 JSON 即可直连百炼；唯一门槛是需要 GitHub 登录态 |
+| **最快可用路径：内置 Copilot + BYOK `customendpoint`** | 零源码改造，写一个 JSON 即可直连百炼；**未登录 GitHub 反而被允许**（见 §1.6） |
 | **内置 Codex / Claude 的端点被"刻意锁死"** | 宿主用 `-c` / `settings.env` 强制覆写 base_url 与凭据，CC Switch 写的值会被覆盖 |
 | **百炼同时兼容 OpenAI 与 Anthropic 协议** | 两条路线都能对接，优先选 OpenAI 兼容（生态最兼容） |
 
@@ -64,8 +64,8 @@ Copilot SDK runtime
 | `src/vs/platform/agentHost/common/agentHostByokLm.ts:112-192` | 线协议，模型 id 格式 `${vendor}/${id}` |
 | `extensions/copilot/package.json:2006-2179` | `customendpoint` 的完整 JSON Schema |
 
-**配置文件位置**：`<userDataDir>/chatLanguageModels.json`
-（`src/vs/platform/userDataProfile/common/userDataProfile.ts:204`；结构见 `src/vs/workbench/contrib/chat/common/languageModelsConfiguration.ts:41-47`）
+**配置文件位置**：`<userDataDir>/User/chatLanguageModels.json`
+（默认 profile 下 `location` 即 `User` 子目录，**不是** userDataDir 根目录；`src/vs/platform/userDataProfile/common/userDataProfile.ts:204`；结构见 `src/vs/workbench/contrib/chat/common/languageModelsConfiguration.ts:41-47`）
 
 **API key 不落盘**：存 VS Code Secret Storage，key 名 `copilot-byok-<provider>[-<model>]-api-key`
 （`extensions/copilot/src/extension/byok/vscode-node/byokStorageService.ts:68/76/96`）。
@@ -132,12 +132,13 @@ Copilot SDK runtime
 
 **前置条件**（缺一即"配了没反应"）：
 
-- [ ] **必须有 GitHub 登录态 + Copilot token** —— `byokContribution.ts:81-107` 的 `isClientBYOKAllowed` 会在无登录时把**所有** provider 注销
-- [ ] `chat.agentHost.byokModels.enabled` 为 `true`（默认已是 `agentHostSchema.ts:453-455`）
+- [x] **无需 GitHub 登录** —— `isClientBYOKAllowed`（`byokProvider.ts:226-234`）对 signed-out 用户返回 **`true`**，
+      注释原文 *"Signed-out users are allowed"*。反之若登录了 GitHub 但拿不到 Copilot token，反而会被拒绝（`:230-232`）
+- [x] `chat.agentHost.byokModels.enabled` 为 `true` —— 实测本机 `agent-host-config.json` 已是 `byokModelsEnabled: true`
 
 **实施步骤**：
 
-1. 确认 `chatLanguageModels.json` 路径（`<userDataDir>` 随启动 profile 变化，需实测）
+1. 确认 `chatLanguageModels.json` 路径（默认 profile 下为 `<userDataDir>/User/chatLanguageModels.json`；实测本机即此，非根目录）
 2. 写入 provider 组（示例见 §4.1）
 3. 在 UI 中填入 API key（走 Secret Storage，勿明文写文件）
 4. 重启窗口，在模型选择器中确认出现 `customendpoint/...` 条目
@@ -201,7 +202,7 @@ Codex agent 的模型请求实际到达百炼（可用百炼侧 token 用量日�
 
 **实施**：在 `src-tauri/src/app_config.rs:400-418` 的 `AppType` 增加 `Evacode`，实现两件事：
 
-1. 写 `<userDataDir>/chatLanguageModels.json`（provider 组，走 §4.1 schema）
+1. 写 `<userDataDir>/User/chatLanguageModels.json`（默认 profile 位于 `User` 子目录，**非根目录**；provider 组走 §4.1 schema）
 2. 沿用已有 `live/project/claude.rs:89` 的 `direct_patch` 字段级补丁策略，**不要整体覆写**（该文件里可能有用户手工加的模型）
 
 **风险**：中。需在两个仓库间同步 schema；copilot 扩展升级可能改 schema。
@@ -217,38 +218,42 @@ Codex agent 的模型请求实际到达百炼（可用百炼侧 token 用量日�
 > 直接明文写 `apiKey` 字段虽然可用，但会落盘。
 
 ```jsonc
-{
-  "providerGroups": [
-    {
-      "name": "阿里云百炼",
-      "vendor": "customendpoint",
-      "settings": {
-        "apiKey": "${input:bailian-key}",          // 引用 Secret Storage
-        "apiType": "chat-completions",             // 百炼默认走 OpenAI 兼容
-        "models": [
-          {
-            "id": "qwen3-coder-plus",
-            "name": "Qwen3 Coder Plus",
-            "url": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
-            "toolCalling": "true",                 // Agent 场景必须为 true
-            "vision": "false",
-            "maxInputTokens": "262144",
-            "maxOutputTokens": "65536"
-          },
-          {
-            "id": "qwen3-max",
-            "name": "Qwen3 Max",
-            "url": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
-            "toolCalling": "true",
-            "maxInputTokens": "262144",
-            "maxOutputTokens": "32768"
-          }
-        ]
-      }
-    }
-  ]
-}
+// 注意：顶层是数组，不是 { "providerGroups": [...] }
+// 依据 languageModelsConfigurationService.ts:218/232（JSON.stringify(groups, undefined, '\t')）
+[
+	{
+		"name": "阿里云百炼",
+		"vendor": "customendpoint",
+		"settings": {
+			"apiKey": "${input:chat.lm.secret.bailian}",   // 引用 Secret Storage
+			"apiType": "chat-completions",                  // 百炼走 OpenAI 兼容
+			"models": [
+				{
+					"id": "qwen3.8-max",
+					"name": "Qwen3.8 Max",
+					"url": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
+					"toolCalling": "true",                  // Agent 场景必须为 true
+					"vision": "false",
+					"maxInputTokens": "262144",
+					"maxOutputTokens": "65536"
+				},
+				{
+					"id": "qwen3.7-plus",
+					"name": "Qwen3.7 Plus",
+					"url": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
+					"toolCalling": "true",
+					"vision": "false",
+					"maxInputTokens": "262144",
+					"maxOutputTokens": "32768"
+				}
+			]
+		}
+	}
+]
 ```
+
+> 模型 ID 取自百炼官方模型大全（2026-09 更新）。若用 Token Plan 套餐，密钥前缀为 `sk-sp-`，
+> 且需改用独立域名 `token-plan.cn-beijing.maas.aliyuncs.com`；普通按量付费用 `sk-` + 通用域名。
 
 **若改用 Anthropic 兼容端点**：`apiType` 改为 `"messages"`，`url` 填到 `/v1/messages`，
 客户端会自动改用 `x-api-key` + `anthropic-version: 2023-06-01`（`customEndpointProvider.ts:291-296`）。
@@ -285,7 +290,7 @@ env_key = "DASHSCOPE_API_KEY"
 
 ### 阶段 1：路线 A 落地（不依赖任何改造）
 
-- [ ] 1.1 按 §4.1 写入 `chatLanguageModels.json`
+- [ ] 1.1 按 §4.1 写入 `<userDataDir>/User/chatLanguageModels.json`（默认 profile 在 `User` 子目录，**非根目录**）
 - [ ] 1.2 通过 UI 将 API key 写入 Secret Storage
 - [ ] 1.3 重启窗口，确认模型选择器出现百炼模型
 - [ ] 1.4 实测：发起一次带工具调用的对话，确认请求到达百炼（百炼侧 token 用量佐证）
@@ -327,7 +332,7 @@ env_key = "DASHSCOPE_API_KEY"
 
 | 风险 | 等级 | 缓解 |
 |---|---|---|
-| 无 GitHub 登录 → BYOK provider 全部注销 | 高 | 路线 A 不可用时直接转 C-1 |
+| 登录了 GitHub 但拿不到 Copilot token → BYOK provider 被注销 | 中 | 保持 signed-out 即可（`byokProvider.ts:227-232`）；若已登录则需修复 token 获取 |
 | 百炼 `/responses` 兼容性未知 | 中 | 阶段 0.5 先验证；不兼容则 Codex 走 `wire_api = "chat"` 并放宽过滤 |
 | C-2 绕过回环代理 → 凭据保护削弱 | 高 | 若实施，需先确认 Secret Storage 与日志脱敏仍生效 |
 | copilot 扩展升级改动 BYOK schema | 中 | C-3 的写入需做 schema 版本容错 |
