@@ -232,19 +232,19 @@ Codex agent 的模型请求实际到达百炼（可用百炼侧 token 用量日�
 					"id": "qwen3.8-max",
 					"name": "Qwen3.8 Max",
 					"url": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
-					"toolCalling": "true",                  // Agent 场景必须为 true
-					"vision": "false",
-					"maxInputTokens": "262144",
-					"maxOutputTokens": "65536"
+					"toolCalling": true,                   // 必须是布尔值，不是字符串！(schema: boolean)
+					"vision": false,                       // 布尔值
+					"maxInputTokens": 262144,              // 数字，不是字符串！(schema: number)
+					"maxOutputTokens": 65536
 				},
 				{
 					"id": "qwen3.7-plus",
 					"name": "Qwen3.7 Plus",
 					"url": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
-					"toolCalling": "true",
-					"vision": "false",
-					"maxInputTokens": "262144",
-					"maxOutputTokens": "32768"
+					"toolCalling": true,
+					"vision": false,
+					"maxInputTokens": 262144,
+					"maxOutputTokens": 32768
 				}
 			]
 		}
