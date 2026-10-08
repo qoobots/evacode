@@ -767,7 +767,7 @@ function getUserDefinedLocale(argvConfig: IArgvConfig): string | undefined {
 		return locale.toLowerCase(); // a directly provided --locale always wins
 	}
 
-	return typeof argvConfig?.locale === 'string' ? argvConfig.locale.toLowerCase() : undefined;
+	return typeof argvConfig?.locale === 'string' ? argvConfig.locale.toLowerCase() : 'zh-cn';
 }
 
 //#endregion
