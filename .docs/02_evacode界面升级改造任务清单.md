@@ -108,7 +108,7 @@
 - [x] 4.2 移除或重定向 `Report Issue...`：已指向本仓库 issues（`reportIssueUrl`）
 - [x] 4.3 命令/菜单隐藏：第三方 Help 链接随 4.1 隐藏；品牌字面量已由 1.5 清扫
 - [x] 4.4 About 对话框品牌化：标题用 `nameLong`（Evacode），许可证指向本仓库；`menubar.ts` "About Evacode"
-- [ ] 4.5 命令面板内部调试命令：保留（不影响用户）；`@vscode` 聊天参与者标签**待人工**决策（见遗留项 H2）
+- [x] 4.5 命令面板内部调试命令：保留（不影响用户）；`@vscode` 聊天参与者与 `defaultChatAgent`（GitHub Copilot）按用户决策**保留不动**（Copilot/插件商标不改动）
 
 ### 阶段 5：遥测 / 更新 / 市场（商业合规与分发控制）
 
@@ -128,7 +128,7 @@
 ### 待人工决策项（需你批准或补充输入，未阻塞其余改造）
 
 - **H1**：回溯并 revert 此前误提交的另一智能体对 `01_大模型…` 文档的重命名（已随品牌提交 `837458ec` 进入 `main`）。需 **force push** 到 `main`，按仓库规则须你明确批准。
-- **H2**：默认 Chat 参与者 `@vscode`（`helpActions.ts:338-366`）与 `product.json` 的 `defaultChatAgent`（GitHub Copilot）商标处理——`@vscode` 标签与 Copilot 均为上游商标，界面需规避或替换为自有助手。
+- **H2（已决策）**：默认 Chat 参与者 `@vscode` 与 `defaultChatAgent`（GitHub Copilot）**保留不动**；第三方插件商标亦不动。无需代码改动（全文清扫从未触及 Copilot / 插件商标）。
 - **H3**：扩展市场来源（B-8）：自建私有市场 URL 还是保留 open-vsx（当前为 open-vsx）。
 - **H4**：首启页深度内容与账号登录/激活（B-6/B-7）。
 - **H5**：是否强制品牌强调色（标题栏/活动栏/状态栏背景），还是完全交给用户主题（当前选后者）。
@@ -139,7 +139,7 @@
 - [ ] 7.1 构建：`scripts/build-local.ps1 compile` + `npm run typecheck-client`（参考 doc 01 §5 阶段 2.7）
 - [ ] 7.2 三平台实机验收：窗口/任务栏/安装包图标均为新 Logo，无 VS Code 残留
 - [ ] 7.3 首启页品牌内容与 B-6 一致；不触发外部（GitHub/Microsoft）网络请求
-- [ ] 7.4 菜单/命令/Help/About 均不含第三方商标与链接
+- [ ] 7.4 菜单/命令/Help/About 均不含第三方商标与链接（**例外**：按用户决策保留 Copilot 与 `@vscode` 商标）
 - [ ] 7.5 遥测/更新/市场行为符合 B-10/B-11/B-8
 - [ ] 7.6 运行 `git status`，确认本次改动清单与提交一致（遵循仓库提交规范：逐文件 `git add`，不用 `-A`/`.`）
 
