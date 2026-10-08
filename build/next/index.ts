@@ -10,7 +10,7 @@ import { promisify } from 'util';
 
 import glob from 'glob';
 import gulpWatch from '../lib/watch/index.ts';
-import { nlsPlugin, createNLSCollector, finalizeNLS, postProcessNLS } from './nls-plugin.ts';
+import { nlsPlugin, createNLSCollector, finalizeNLS, postProcessNLS, copyBuiltInLocalizations } from './nls-plugin.ts';
 import { convertPrivateFields, adjustSourceMap, type ConvertPrivateFieldsResult } from './private-to-property.ts';
 import { rewriteSourceMappingURL } from './source-map-url.ts';
 import { getVersion } from '../lib/getVersion.ts';
@@ -568,6 +568,13 @@ async function bundle(outDir: string, doMinify: boolean, doNls: boolean, doMangl
 			[path.join(REPO_ROOT, 'out-build')]
 		);
 		indexMap = nlsResult.indexMap;
+
+		// Ship the core localizations that are bundled with the product next to
+		// the NLS metadata so the main process can use them as a fallback.
+		await copyBuiltInLocalizations([
+			path.join(REPO_ROOT, outDir),
+			path.join(REPO_ROOT, 'out-build')
+		]);
 	}
 
 	// Post-process and write all output files

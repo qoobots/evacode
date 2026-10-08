@@ -61,6 +61,56 @@ export function createNLSCollector(): NLSCollector {
 }
 
 /**
+ * Core localizations that are bundled with the product. They are consumed by the
+ * main process as a fallback when no language pack extension is installed
+ * (see `src/vs/base/node/nls.ts`).
+ */
+const BUILT_IN_LOCALIZATIONS: readonly { language: string; source: string }[] = [
+	{ language: 'zh-cn', source: 'resources/nls/zh-cn/main.i18n.json' }
+];
+
+/**
+ * Built-in localizations for the extensions that are bundled with the product
+ * (for example `vscode.git`). Consumed by the extension host through
+ * `getBuiltInExtensionTranslationsUri` (see `src/vs/platform/languagePacks/node/languagePacks.ts`).
+ */
+const BUILT_IN_EXTENSION_LOCALIZATIONS: readonly { language: string; source: string }[] = [
+	{ language: 'zh-cn', source: 'resources/nls/zh-cn/extensions' }
+];
+
+/**
+ * Copies the built-in core localizations into the given output directories,
+ * next to the NLS metadata. This is independent of the collected NLS entries so
+ * the translations are always shipped with the product.
+ */
+export async function copyBuiltInLocalizations(outDirs: readonly string[]): Promise<void> {
+	const repositoryRoot = path.join(import.meta.dirname, '..', '..');
+	for (const { language, source } of BUILT_IN_LOCALIZATIONS) {
+		let contents: Buffer;
+		try {
+			contents = await fs.promises.readFile(path.join(repositoryRoot, source));
+		} catch {
+			console.warn(`[nls] Built-in localization '${language}' not found at ${source}`);
+			continue;
+		}
+
+		const fileName = `nls.builtin.${language}.i18n.json`;
+		await Promise.all(outDirs.map(dir => fs.promises.writeFile(path.join(dir, fileName), contents)));
+	}
+
+	for (const { language, source } of BUILT_IN_EXTENSION_LOCALIZATIONS) {
+		const sourceDirectory = path.join(repositoryRoot, source);
+		if (!fs.existsSync(sourceDirectory)) {
+			console.warn(`[nls] Built-in extension localizations '${language}' not found at ${source}`);
+			continue;
+		}
+
+		const folderName = `nls.builtin.${language}.extensions`;
+		await Promise.all(outDirs.map(dir => fs.promises.cp(sourceDirectory, path.join(dir, folderName), { recursive: true })));
+	}
+}
+
+/**
  * Finalizes NLS collection and writes output files.
  * Call this after all esbuild builds have completed.
  */

@@ -9,6 +9,17 @@ import { mark } from '../common/performance.js';
 import { ILanguagePacks, INLSConfiguration } from '../../nls.js';
 import { Promises } from './pfs.js';
 
+/**
+ * Core localizations that are bundled with the product and used as a fallback
+ * when no language pack extension is installed for the requested language.
+ *
+ * The files are shipped next to the NLS metadata (see `build/next/nls-plugin.ts`)
+ * and contain the same format as a language pack `main.i18n.json`.
+ */
+const BUILT_IN_LANGUAGE_PACKS: Record<string, string> = {
+	'zh-cn': 'nls.builtin.zh-cn.i18n.json'
+};
+
 export interface IResolveNLSConfigurationContext {
 
 	/**
@@ -58,7 +69,19 @@ export async function resolveNLSConfiguration({ userLocale, osLocale, userDataPa
 	}
 
 	try {
-		const languagePacks = await getLanguagePackConfigurations(userDataPath);
+		let languagePacks = await getLanguagePackConfigurations(userDataPath);
+
+		// Fall back to the core localizations that are bundled with the product
+		// when no language pack is installed for the requested language. This makes
+		// the bundled language the default without requiring a language pack
+		// extension to be installed from the marketplace.
+		if (!languagePacks || !resolveLanguagePackLanguage(languagePacks, userLocale)) {
+			const builtInLanguagePacks = getBuiltInLanguagePackConfigurations(nlsMetadataPath);
+			if (resolveLanguagePackLanguage(builtInLanguagePacks, userLocale)) {
+				languagePacks = builtInLanguagePacks;
+			}
+		}
+
 		if (!languagePacks) {
 			return defaultNLSConfiguration(userLocale, osLocale, nlsMetadataPath);
 		}
@@ -180,6 +203,24 @@ async function getLanguagePackConfigurations(userDataPath: string): Promise<ILan
 	} catch (err) {
 		return undefined; // Do nothing. If we can't read the file we have no language pack config.
 	}
+}
+
+/**
+ * Returns the language pack configurations for the localizations that are
+ * bundled with the product. The translation files are located in the NLS
+ * metadata directory next to `nls.messages.json`.
+ */
+function getBuiltInLanguagePackConfigurations(nlsMetadataPath: string): ILanguagePacks {
+	const result: ILanguagePacks = {};
+	for (const [language, fileName] of Object.entries(BUILT_IN_LANGUAGE_PACKS)) {
+		result[language] = {
+			hash: `builtin.${language}`,
+			label: undefined,
+			extensions: [],
+			translations: { vscode: join(nlsMetadataPath, fileName) }
+		};
+	}
+	return result;
 }
 
 function resolveLanguagePackLanguage(languagePacks: ILanguagePacks, locale: string | undefined): string | undefined {

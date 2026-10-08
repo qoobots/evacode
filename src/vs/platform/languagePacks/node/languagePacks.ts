@@ -29,17 +29,27 @@ interface ILanguagePack {
 	translations: { [id: string]: string };
 }
 
+/**
+ * Localizations that are bundled with the product. They are used as a fallback
+ * when no language pack extension provides translations and are also offered as
+ * display languages. The `directory` is relative to the application root
+ * (see `build/next/nls-plugin.ts`).
+ */
+const BUILT_IN_LANGUAGE_PACKS: Record<string, { directory: string; label: string }> = {
+	'zh-cn': { directory: 'out/nls.builtin.zh-cn.extensions', label: '中文(简体)' }
+};
+
 export class NativeLanguagePackService extends LanguagePackBaseService {
 	private readonly cache: LanguagePacksCache;
 
 	constructor(
 		@IExtensionManagementService private readonly extensionManagementService: IExtensionManagementService,
-		@INativeEnvironmentService environmentService: INativeEnvironmentService,
+		@INativeEnvironmentService private readonly environmentService: INativeEnvironmentService,
 		@IExtensionGalleryService extensionGalleryService: IExtensionGalleryService,
 		@ILogService private readonly logService: ILogService
 	) {
 		super(extensionGalleryService);
-		this.cache = this._register(new LanguagePacksCache(environmentService, logService));
+		this.cache = this._register(new LanguagePacksCache(this.environmentService, logService));
 		this.extensionManagementService.registerParticipant({
 			postInstall: async (extension: ILocalExtension): Promise<void> => {
 				return this.postInstallExtension(extension);
@@ -52,14 +62,29 @@ export class NativeLanguagePackService extends LanguagePackBaseService {
 
 	async getBuiltInExtensionTranslationsUri(id: string, language: string): Promise<URI | undefined> {
 		const packs = await this.cache.getLanguagePacks();
-		const pack = packs[language];
-		if (!pack) {
-			this.logService.warn(`No language pack found for ${language}`);
+		const translation = packs[language]?.translations[id];
+		if (translation) {
+			return URI.file(translation);
+		}
+
+		// Fall back to the extension localizations that are bundled with the product.
+		const builtInUri = await this.getBuiltInExtensionTranslationsUriFromBundle(id, language);
+		if (builtInUri) {
+			return builtInUri;
+		}
+
+		this.logService.warn(`No language pack found for ${language}`);
+		return undefined;
+	}
+
+	private async getBuiltInExtensionTranslationsUriFromBundle(id: string, language: string): Promise<URI | undefined> {
+		const builtInLanguagePack = BUILT_IN_LANGUAGE_PACKS[language];
+		if (!builtInLanguagePack) {
 			return undefined;
 		}
 
-		const translation = pack.translations[id];
-		return translation ? URI.file(translation) : undefined;
+		const uri = URI.joinPath(URI.file(this.environmentService.appRoot), builtInLanguagePack.directory, `${id}.i18n.json`);
+		return await Promises.exists(uri.fsPath) ? uri : undefined;
 	}
 
 	async getInstalledLanguages(): Promise<Array<ILanguagePackItem>> {
@@ -72,6 +97,15 @@ export class NativeLanguagePackService extends LanguagePackBaseService {
 				extensionId: languagePack.extensions[0].extensionIdentifier.id,
 			};
 		});
+
+		// Also expose the localizations that are bundled with the product so that
+		// they can be selected even though no language pack extension is installed.
+		for (const [locale, builtInLanguagePack] of Object.entries(BUILT_IN_LANGUAGE_PACKS)) {
+			if (!languages.some(language => language.id === locale)) {
+				languages.push(this.createQuickPickItem(locale, builtInLanguagePack.label));
+			}
+		}
+
 		languages.push(this.createQuickPickItem('en', 'English'));
 		languages.sort((a, b) => a.label.localeCompare(b.label));
 		return languages;
