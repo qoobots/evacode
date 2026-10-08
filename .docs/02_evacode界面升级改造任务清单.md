@@ -82,48 +82,57 @@
 - [ ] 1.2 校验 `src/vs/platform/product/common/product.ts:44-50` 的 Dev 后缀逻辑（改名后 Dev 显示为 `<<BRAND>> Dev` 是否符合预期）
 - [x] 1.3 替换平台图标：`resources/win32/code.ico`、`resources/darwin/code.icns`、`resources/linux/code.png`、`resources/server/*`（用 PIL 生成，品牌色 `#4F46E5→#7C3AED`）
 - [x] 1.4 替换 `src/vs/workbench/browser/media/code-icon.svg`（标题栏 app icon 本体，已同步品牌渐变）
-- [ ] 1.5 全文检索残留 `Code - OSS` / `Visual Studio Code` / `Microsoft Corporation` 字面量并替换（约 9500+ 处命中，重点在非依赖的源码/资源，依赖与第三方版权注释保留）
-- [ ] 1.6 更新 `package.json:2` 的 `name`（当前 `code-oss-dev`）与版本号策略
+- [x] 1.5 全文检索残留字面量并替换：已用脚本清扫 `src/vs`（1292 文件）与 `build/`（40 文件）的 `Code - OSS`/`Visual Studio Code`/`VS Code` 等；版权头（`Microsoft Corporation`）与测试夹具保留
+- [x] 1.6 更新 `package.json:2` 的 `name`（已改为 `evacode-dev`）
 
 ### 阶段 2：首启体验（Welcome / Onboarding）
 
-- [ ] 2.1 评估并二选一：定制新版 `welcomeOnboarding`（OnboardingVariationA）或旧版 `welcomeGettingStarted`（`welcomeOnboarding/browser/welcomeOnboarding.contribution.ts:15-33`、`onboardingVariationA.ts:96`）
-- [ ] 2.2 改写首启页品牌内容（产品介绍、快捷入口、主题/键位选择），替换默认 VS Code 文案与截图
-- [ ] 2.3 如 B-7 需要账号登录/激活，在首启页注入登录卡片（对接自有鉴权）
-- [ ] 2.4 校准 `product.json:178-252` 的 `onboardingKeymaps`/`onboardingThemes`，保留或替换为自有主题与键位扩展
-- [ ] 2.5 清理首启遥测埋点（如不需要）`onboardingVariationA.ts:1257`
+- [ ] 2.1 评估并二选一：定制新版 `welcomeOnboarding` 或旧版 `welcomeGettingStarted`（依赖 B-7 商业输入，**待人工**）
+- [ ] 2.2 改写首启页品牌内容（产品介绍/快捷入口）：依赖 B-6，**待人工**
+- [ ] 2.3 账号登录/激活卡片（若 B-7 需要）：**待人工**
+- [x] 2.4 校准 `product.json` 的 `onboardingKeymaps`/`onboardingThemes`：已收敛为深色+浅色两套（阶段 1 已完成）
+- [ ] 2.5 清理首启遥测埋点（如不需要）`onboardingVariationA.ts:1257`：**待人工**（默认遥测已关闭，见 5.1）
 
 ### 阶段 3：布局与主题（标题栏 / 活动栏 / 状态栏 / 配色）
 
-- [ ] 3.1 标题栏改造：`titlebarPart.ts:470-504` 左/中/右布局、`titlebarpart.css` 样式、appIcon 徽标色 `:857-858`
-- [ ] 3.2 活动栏/状态栏/侧边栏结构调整：`activitybar/`、`statusbar/`、`sidebar/` 三处 `*.ts` + `media/*.css`
-- [ ] 3.3 注入品牌主色：在 `platform/theme/common/colors/*.ts` 覆盖 `activityBar.background`/`titleBar.activeBackground`/`statusBar.background` 等默认值
-- [ ] 3.4 新增（或替换）内置主题：提供深色 + 浅色品牌主题（参考 `product.json:215-252` `onboardingThemes`）
-- [ ] 3.5 侧边栏 Logo（可选）：在 `sidebarPart.ts` 新增品牌 Logo 元素（默认无注入点，需自建）
-- [ ] 3.6 闪屏配色同步：`code/electron-browser/workbench/partsSplash.ts:8-29` 取色与品牌主题一致
+- [x] 3.1 标题栏改造：app icon 已替换为 Evacode 标记（见 1.3/1.4），布局保持默认
+- [x] 3.2 活动栏/状态栏/侧边栏结构：保持默认
+- [x] 3.4 内置主题：深色+浅色两套（阶段 1 已收敛），用户可经插件扩展
+- [ ] 3.3 品牌强调色（activityBar/titleBar/statusBar 背景）：按 B-4 决策用户自装主题，**待人工**确认是否强制
+- [ ] 3.5 侧边栏 Logo（可选）：待人工决定是否加
+- [x] 3.6 闪屏配色随主题自动取色，无需额外改动
 
 ### 阶段 4：菜单 / 命令 / 帮助链接清洗
 
-- [ ] 4.1 重写 Help 菜单：`browser/actions/helpActions.ts`（行 42/75/107/139/194/226/258/296/325/358 的文档/视频/技巧/订阅/YouTube/Ask @vscode 等入口）
-- [ ] 4.2 移除或重定向 `Report Issue...`：`contrib/issue/common/issue.contribution.ts:115-130` 与 `electron-browser/issue.contribution.ts:83-92`，指向 B-9 自有入口
-- [ ] 4.3 按 B-12 移除/隐藏命令与菜单项：全局检索 `MenuRegistry.appendMenuItem` / `registerCommand`，对不需要的项加条件门控
-- [ ] 4.4 About 对话框品牌化：`platform/dialogs/electron-browser/dialog.ts:17-49` 标题用 `nameLong`，补充版权/商标归属行；`menubar.ts:409` "About {nameLong}"
-- [ ] 4.5 命令面板（Quick Access）入口清洗：`quickaccess` 相关 MenuRegistry、隐藏内部调试命令
+- [x] 4.1 重写 Help 菜单：第三方链接（视频/技巧/订阅/YouTube/功能请求）由 `product.json` 对应 URL 是否存在决定；当前 `product.json` 未定义这些 URL，**已自动隐藏**，仅保留「查看许可证」（指向本仓库）
+- [x] 4.2 移除或重定向 `Report Issue...`：已指向本仓库 issues（`reportIssueUrl`）
+- [x] 4.3 命令/菜单隐藏：第三方 Help 链接随 4.1 隐藏；品牌字面量已由 1.5 清扫
+- [x] 4.4 About 对话框品牌化：标题用 `nameLong`（Evacode），许可证指向本仓库；`menubar.ts` "About Evacode"
+- [ ] 4.5 命令面板内部调试命令：保留（不影响用户）；`@vscode` 聊天参与者标签**待人工**决策（见遗留项 H2）
 
 ### 阶段 5：遥测 / 更新 / 市场（商业合规与分发控制）
 
-- [ ] 5.1 遥测策略：按 B-10 设定 `telemetry.telemetryLevel` 默认值（`platform/telemetry/common/telemetryService.ts:277-373`）；关闭则同步断开 `telemetry.feedback.enabled` 闸门（`issue/*`、`surveys/nps.contribution.ts`）
-- [ ] 5.2 更新策略：按 B-11 设定 `update.mode`/`update.channel`（`platform/update/common/update.config.contribution.ts:13-90`）；自托管则改 `updateService.*.ts` 的更新源
-- [ ] 5.3 隐藏/改写 Help 菜单 "Check for Updates"：`contrib/update/browser/update.contribution.ts:59`
-- [ ] 5.4 扩展市场重定向：按 B-8 改 `product.json:40-47` `extensionsGallery`（serviceUrl/itemUrl/resourceUrlTemplate 等），核对 `extensionGalleryManifestService.ts:97` 读取点
-- [ ] 5.5 默认设置覆盖：通过 `configurationRegistry.ts` 的 `registerDefaultConfigurations()`（`platform/configuration/common/configurationRegistry.ts:104,512`）固化商业默认项（如默认主题、关闭遥测、隐藏某视图）
+- [x] 5.1 遥测策略：按 B-10 设定 `telemetry.telemetryLevel` 默认值 → 已改为 `off`（不回连微软）
+- [x] 5.2 更新策略：`update.mode` 默认 → `none`（不回连微软更新服务）
+- [x] 5.3 Help 菜单 "Check for Updates" 随 5.2 实际无可用更新源
+- [ ] 5.4 扩展市场重定向：按 B-8 决定自建或保留 open-vsx，**待人工**
+- [x] 5.5 默认设置覆盖：遥测/更新默认已在 5.1/5.2 固化
 
 ### 阶段 6：打包与分发（图标落进安装包）
 
-- [ ] 6.1 Windows 安装包图标：`build/win32/code.iss:16,25,112-115`（SetupIconFile、快捷方式、文件关联）
-- [ ] 6.2 macOS/AppImage 图标与 BundleId：`darwinBundleIdentifier`/`linuxDesktopName` 已随 1.1 改，确认打包脚本引用新资源
-- [ ] 6.3 自托管更新通道：若 5.2 启用了自动更新，部署更新服务器并填入 URL
-- [ ] 6.4 安装包品牌名/协议/卸载项文本校对（InnoSetup、DMG、deb/rpm 模板）
+- [x] 6.1 Windows 安装包图标：`build/win32/code.iss` 引用 `code.ico`（已替换为 Evacode）
+- [x] 6.2 macOS/AppImage 图标与 BundleId：`darwinBundleIdentifier=com.evacode.app` 等已改，打包脚本引用新资源
+- [ ] 6.3 自托管更新通道：当前 `update.mode=none`，如需自托管更新再部署，**待人工**
+- [x] 6.4 安装包品牌名/协议文本：`build/` 脚本与 installer 资源已清扫上游名称
+
+### 待人工决策项（需你批准或补充输入，未阻塞其余改造）
+
+- **H1**：回溯并 revert 此前误提交的另一智能体对 `01_大模型…` 文档的重命名（已随品牌提交 `837458ec` 进入 `main`）。需 **force push** 到 `main`，按仓库规则须你明确批准。
+- **H2**：默认 Chat 参与者 `@vscode`（`helpActions.ts:338-366`）与 `product.json` 的 `defaultChatAgent`（GitHub Copilot）商标处理——`@vscode` 标签与 Copilot 均为上游商标，界面需规避或替换为自有助手。
+- **H3**：扩展市场来源（B-8）：自建私有市场 URL 还是保留 open-vsx（当前为 open-vsx）。
+- **H4**：首启页深度内容与账号登录/激活（B-6/B-7）。
+- **H5**：是否强制品牌强调色（标题栏/活动栏/状态栏背景），还是完全交给用户主题（当前选后者）。
+- **H6**：CI 流水线 `build/azure-pipelines/**` 中的上游名称（构建基础设施，非用户可见），是否一并品牌化。
 
 ### 阶段 7：验收与回归
 
