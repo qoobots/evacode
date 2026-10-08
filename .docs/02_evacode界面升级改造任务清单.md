@@ -32,7 +32,7 @@
 | B-2 | 应用进程名（`applicationName`，如 `evacode`） | 命令行、数据目录、协议 | 1 | **已确认：evacode（已落地）** |
 | B-3 | 数据目录名（`dataFolderName`、`.vscode-oss` → `.<brand>`） | 用户配置隔离 | 1 |
 | B-4 | 主色 / 强调色 / 深色&浅色默认主题 | 标题栏、活动栏、强调色 | 3 | **已确认：默认仅深色 + 浅色两套，用户可经插件自行扩展主题；品牌强调色待提供** |
-| B-5 | Logo 源文件（SVG 矢量 + 各平台 ico/icns/png） | 窗口/安装包/任务栏 | 1,6 |
+| B-5 | Logo 源文件（SVG 矢量 + 各平台 ico/icns/png） | 窗口/安装包/任务栏 | 1,6 | **已生成：品牌色 `#4F46E5 → #7C3AED`，全套图标已产出（code.ico / code.icns / code.png / server/* / 标题栏 SVG）** |
 | B-6 | 首启引导要呈现的内容（产品介绍/快捷入口/注册登录） | 首启页 | 2 |
 | B-7 | 是否需要内置账号登录/激活（影响首启与 Help 菜单） | 首启页、命令面板 | 2,4 |
 | B-8 | 扩展市场来源（自建 Open VSX / 私有市场 URL） | `extensionsGallery` | 5 |
@@ -80,8 +80,8 @@
 
 - [ ] 1.1 修改 `product.json` 品牌字段：`nameShort`/`nameLong`/`applicationName`/`dataFolderName`/`sharedDataFolderName`/`urlProtocol`/`win32*`/`darwin*`/`linux*`（`product.json:2-37`）
 - [ ] 1.2 校验 `src/vs/platform/product/common/product.ts:44-50` 的 Dev 后缀逻辑（改名后 Dev 显示为 `<<BRAND>> Dev` 是否符合预期）
-- [ ] 1.3 替换平台图标：`resources/win32/code.ico`、`resources/darwin/code.icns`、`resources/linux/code.png`、`resources/server/*`
-- [ ] 1.4 替换 `src/vs/workbench/browser/media/code-icon.svg`（标题栏 app icon 本体）
+- [x] 1.3 替换平台图标：`resources/win32/code.ico`、`resources/darwin/code.icns`、`resources/linux/code.png`、`resources/server/*`（用 PIL 生成，品牌色 `#4F46E5→#7C3AED`）
+- [x] 1.4 替换 `src/vs/workbench/browser/media/code-icon.svg`（标题栏 app icon 本体，已同步品牌渐变）
 - [ ] 1.5 全文检索残留 `Code - OSS` / `Visual Studio Code` / `Microsoft Corporation` 字面量并替换（约 9500+ 处命中，重点在非依赖的源码/资源，依赖与第三方版权注释保留）
 - [ ] 1.6 更新 `package.json:2` 的 `name`（当前 `code-oss-dev`）与版本号策略
 
