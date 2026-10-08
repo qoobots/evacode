@@ -8,7 +8,7 @@ import path from 'path';
 import { execFileSync } from 'child_process';
 
 /**
- * Stage 3 of the Copilot SDK -> VS Code integration pipeline.
+ * Stage 3 of the Copilot SDK -> Evacode integration pipeline.
  * See microsoft/vscode-engineering specs/sdk-vscode-integration.spec.md.
  *
  * Overrides `@github/copilot-sdk` in the root and `remote` manifests, records

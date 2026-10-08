@@ -118,7 +118,7 @@ function computeChecksum(filename: string): string {
 
 // foundry-local-sdk (on-device chat dictation) loads its N-API addons and shared
 // libraries from the per-user runtime cache. Exclude the package's native files,
-// which may require a newer glibc than VS Code's supported maximum.
+// which may require a newer glibc than Evacode's supported maximum.
 function getFoundryLocalExcludeFilter(): string[] {
 	return [
 		'**',

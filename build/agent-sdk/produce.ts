@@ -5,7 +5,7 @@
 
 /**
  * Per-(vscode-platform, arch) agent-SDK producer. Builds the tarballs needed
- * by ONE VS Code build, optionally uploads them to the CDN, and writes a
+ * by ONE Evacode build, optionally uploads them to the CDN, and writes a
  * small JSON results file that the gulpfile-side `packageTask` reads to
  * stamp `product.json`'s `agentSdks` field.
  *
@@ -31,7 +31,7 @@
  * the same blob, and the HEAD-then-fail in `upload.ts` is purely a
  * defense against re-runs with drifted bytes (toolchain change, etc.).
  *
- * For VS Code builds where no SDK applies (e.g. armhf), exits with an
+ * For Evacode builds where no SDK applies (e.g. armhf), exits with an
  * empty result set. product.json ships without `agentSdks` regardless of
  * VSCODE_PUBLISH.
  */

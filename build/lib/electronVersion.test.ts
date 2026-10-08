@@ -17,14 +17,14 @@ suite('Electron runtime reuse', () => {
 			try {
 				await fs.writeFile(path.join(repoRoot, '.npmrc'), 'target="42.9.3"\nms_build_id="test"\n');
 				await fs.writeFile(path.join(repoRoot, 'product.json'), JSON.stringify({
-					nameLong: 'Code - OSS',
-					nameShort: 'Code - OSS',
+					nameLong: 'Evacode',
+					nameShort: 'Evacode',
 					applicationName: 'code-oss',
 				}));
 				const electronDir = path.join(repoRoot, '.build', 'electron');
 				const executable = platform === 'darwin'
-					? path.join(electronDir, 'Code - OSS.app', 'Contents', 'MacOS', 'Code - OSS')
-					: path.join(electronDir, platform === 'win32' ? 'Code - OSS.exe' : 'code-oss');
+					? path.join(electronDir, 'Evacode.app', 'Contents', 'MacOS', 'Evacode')
+					: path.join(electronDir, platform === 'win32' ? 'Evacode.exe' : 'code-oss');
 				const results = [shouldDownloadElectron(repoRoot, {}, platform)];
 				await fs.mkdir(path.dirname(executable), { recursive: true });
 				await fs.writeFile(path.join(electronDir, 'version'), 'v42.9.3\n');

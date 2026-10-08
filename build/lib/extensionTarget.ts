@@ -7,7 +7,7 @@ import fs from 'fs';
 
 /**
  * Detects whether the current Linux system uses musl libc (Alpine Linux).
- * Mirrors the detection used in `node-vsce-sign` and the VS Code extension management.
+ * Mirrors the detection used in `node-vsce-sign` and the Evacode extension management.
  */
 export function isAlpineLinux(): boolean {
 	let content: string | undefined;
@@ -102,7 +102,7 @@ export function getCurrentExtensionTarget(): string | undefined {
 
 /**
  * Derives the GitHub release asset name for a platform-specific extension from its name and
- * marketplace target platform. Platform-specific VS Code extensions are conventionally named
+ * marketplace target platform. Platform-specific Evacode extensions are conventionally named
  * `<name>-<target>.vsix` where `<target>` is the marketplace target platform (e.g.
  * `my-ext-win32-x64.vsix`, `my-ext-linux-armhf.vsix`, `my-ext-darwin-arm64.vsix`).
  *

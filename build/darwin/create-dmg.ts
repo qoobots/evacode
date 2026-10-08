@@ -165,13 +165,13 @@ async function main(buildDir?: string, outDir?: string): Promise<void> {
 	let title = 'Code OSS';
 	switch (quality) {
 		case 'stable':
-			title = 'VS Code';
+			title = 'Evacode';
 			break;
 		case 'insider':
-			title = 'VS Code Insiders';
+			title = 'Evacode Insiders';
 			break;
 		case 'exploration':
-			title = 'VS Code Exploration';
+			title = 'Evacode Exploration';
 			break;
 	}
 

@@ -405,16 +405,16 @@ class ESRPReleaseService {
 			owners: [{ owner: { userPrincipalName: 'lszomoru@microsoft.com' } }],
 			approvers: [{ approver: { userPrincipalName: 'lszomoru@microsoft.com' }, isAutoApproved: true, isMandatory: false }],
 			releaseInfo: {
-				title: 'VS Code',
+				title: 'Evacode',
 				properties: {
 					'ReleaseContentType': 'InstallPackage'
 				},
 				minimumNumberOfApprovers: 1
 			},
 			productInfo: {
-				name: 'VS Code',
+				name: 'Evacode',
 				version,
-				description: 'VS Code'
+				description: 'Evacode'
 			},
 			accessPermissionsInfo: {
 				mainPublisher: 'VSCode',
