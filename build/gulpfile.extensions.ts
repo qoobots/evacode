@@ -58,6 +58,7 @@ const compilations = [
 	'extensions/debug-auto-launch/tsconfig.json',
 	'extensions/debug-server-ready/tsconfig.json',
 	'extensions/emmet/tsconfig.json',
+	'extensions/eva-ai/tsconfig.json',
 	'extensions/extension-editing/tsconfig.json',
 	'extensions/git/tsconfig.json',
 	'extensions/git-base/tsconfig.json',

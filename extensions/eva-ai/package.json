@@ -1,0 +1,84 @@
+{
+	"name": "eva-ai",
+	"displayName": "Eva AI",
+	"description": "Use Eva AI large language models in chat, as an alternative to Copilot.",
+	"version": "0.0.1",
+	"license": "MIT",
+	"engines": {
+		"vscode": "*"
+	},
+	"main": "./out/extension.js",
+	"activationEvents": [
+		"onStartupFinished"
+	],
+	"contributes": {
+		"commands": [
+			{
+				"command": "eva-ai.login",
+				"title": "Eva AI: 登录"
+			},
+			{
+				"command": "eva-ai.logout",
+				"title": "Eva AI: 退出登录"
+			}
+		],
+		"languageModelChatProviders": [
+			{
+				"vendor": "eva-ai",
+				"displayName": "Eva AI"
+			}
+		],
+		"configuration": {
+			"title": "Eva AI",
+			"properties": {
+				"eva-ai.serverUrl": {
+					"type": "string",
+					"default": "http://localhost:8080/api/governance",
+					"description": "EVA IAM 服务地址。登录（OAuth2 PKCE）使用此地址。"
+				},
+				"eva-ai.baseUrl": {
+					"type": "string",
+					"default": "http://localhost:8080/api/ai/v1",
+					"description": "EVA AI 网关地址（OpenAI 兼容）。留空时按 serverUrl 推导。"
+				},
+				"eva-ai.clientId": {
+					"type": "string",
+					"default": "eva-desktop",
+					"description": "OAuth2 客户端标识。需与 EVA IAM 侧已登记的一致。"
+				},
+				"eva-ai.models": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"default": [],
+					"description": "只暴露这些模型。留空表示暴露网关 /models 返回的全部模型。"
+				},
+				"eva-ai.defaultModel": {
+					"type": "string",
+					"default": "",
+					"description": "优先模型。留空表示使用网关返回的默认模型。"
+				},
+				"eva-ai.temperature": {
+					"type": "number",
+					"default": 0.2,
+					"description": "采样温度。个别模型不支持该参数，届时会自动重试一次并去掉它。"
+				},
+				"eva-ai.maxInputTokens": {
+					"type": "number",
+					"default": 128000,
+					"description": "模型可接受的最大输入 token 数。网关不回传该值，只能估算。"
+				},
+				"eva-ai.maxOutputTokens": {
+					"type": "number",
+					"default": 8192,
+					"description": "模型可生成的最大输出 token 数。网关不回传该值，只能估算。"
+				}
+			}
+		}
+	},
+	"scripts": {
+		"compile": "gulp compile-extension:eva-ai",
+		"watch": "gulp watch-extension:eva-ai"
+	}
+}
