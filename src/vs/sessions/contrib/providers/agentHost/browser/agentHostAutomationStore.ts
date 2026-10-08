@@ -218,7 +218,7 @@ export class AgentHostAutomationStore extends Disposable implements ISessionsPro
 					id: plugin.id,
 					label: this._customizationLabel(plugin),
 					description: URI.parse(plugin.uri).scheme === SYNCED_CUSTOMIZATION_SCHEME
-						? localize('agentHostAutomation.syncedCustomizationDescription', "Customizations synced from VS Code.")
+						? localize('agentHostAutomation.syncedCustomizationDescription', "Customizations synced from Evacode.")
 						: plugin.version ? localize('agentHostAutomation.customizationVersion', "Version {0}", plugin.version) : undefined,
 					selected: !sameTarget || saved.has(plugin.id),
 					outdated: sameTarget && saved.has(plugin.id)
@@ -240,7 +240,7 @@ export class AgentHostAutomationStore extends Disposable implements ISessionsPro
 	private _customizationLabel(plugin: ClientPluginCustomization): string {
 		const uri = URI.parse(plugin.uri);
 		return uri.scheme === SYNCED_CUSTOMIZATION_SCHEME
-			? localize('agentHostAutomation.syncedCustomizations', "VS Code Customizations")
+			? localize('agentHostAutomation.syncedCustomizations', "Evacode Customizations")
 			: plugin.name || basename(uri);
 	}
 

@@ -14,7 +14,7 @@
 	justify-content: center;
 	gap: var(--vscode-spacing-size40, 4px);
 	box-sizing: border-box;
-	/* Match the VS Code editor read-only banner: 26px tall, 12px text. */
+	/* Match the Evacode editor read-only banner: 26px tall, 12px text. */
 	height: 26px;
 	/* Match the tab strip's insets so the banner starts and ends flush with the
 		tabs; the extra left inset accounts for the header's status-icon column. */

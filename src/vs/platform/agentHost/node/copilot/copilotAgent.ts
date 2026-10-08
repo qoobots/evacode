@@ -606,7 +606,7 @@ interface ICopilotDiscoveryResultMetrics {
  */
 const MAX_STARTUP_CONFIG_RETRIES = 1;
 
-/** `origin` value written by the VS Code extension-host Copilot CLI feature. */
+/** `origin` value written by the Evacode extension-host Copilot CLI feature. */
 const EXTENSION_HOST_CLI_MARKER_ORIGIN = 'vscode';
 
 /** File name of the marker written beside a Copilot CLI session's SDK event log. */
@@ -655,12 +655,12 @@ function parseExtensionHostCliMarker(raw: string): IExtensionHostCliMarker | und
 }
 
 /**
- * Whether a marker identifies a chat created by the VS Code extension host —
+ * Whether a marker identifies a chat created by the Evacode extension host —
  * the only chats migration ever adopts.
  *
  * Mirrors the extension host's `getSessionOrigin`: honor an explicit `origin`
  * (the GitHub Copilot app writes `other`), else guess `vscode` only when older
- * origin-less markers carry VS Code-specific properties.
+ * origin-less markers carry Evacode-specific properties.
  */
 function isExtensionHostCliMarker(marker: IExtensionHostCliMarker | undefined): boolean {
 	if (!marker || Object.keys(marker).length === 0) {
@@ -2700,7 +2700,7 @@ export class CopilotAgent extends Disposable implements IAgent {
 		const startClient = async () => {
 			this._logService.info('[Copilot] Starting CopilotClient...');
 
-			// Build a clean env for the CLI subprocess, stripping Electron/VS Code vars
+			// Build a clean env for the CLI subprocess, stripping Electron/Evacode vars
 			// that can interfere with the Node.js process the SDK spawns.
 			const env = this._createCopilotCliEnvironment(startupConfig.skillCharBudget);
 			env['COPILOT_HOME'] = getCopilotHomePath(this._environmentService.userHome.fsPath, env);
@@ -2727,7 +2727,7 @@ export class CopilotAgent extends Disposable implements IAgent {
 				env['COPILOT_CLI_ENABLED_FEATURE_FLAGS'] = [...flags].join(',');
 			}
 
-			// Identify VS Code's agent host traffic in CAPI
+			// Identify Evacode's agent host traffic in CAPI
 			env['GITHUB_COPILOT_INTEGRATION_ID'] = COPILOT_INTEGRATION_ID;
 			this._logService.info(`[Copilot] Set CLI env: GITHUB_COPILOT_INTEGRATION_ID=${COPILOT_INTEGRATION_ID}`);
 
@@ -2775,13 +2775,13 @@ export class CopilotAgent extends Disposable implements IAgent {
 			}
 
 			// The SDK's sandbox auto-detection looks for `<MXC_BIN_DIR>/<arch>/wxc-exec.exe`
-			// (and the Linux/macOS equivalents). VS Code core ships the MXC sandbox binaries
+			// (and the Linux/macOS equivalents). Evacode core ships the MXC sandbox binaries
 			// at `<nodeModules>/@microsoft/mxc-sdk/bin/<arch>/`, so point `MXC_BIN_DIR` there.
 			// The @github/copilot package's own `mxc-bin/` is excluded from the product build
 			// (see build/.moduleignore), mirroring `CopilotCLISDK.getPackage` in the extension.
 			env['MXC_BIN_DIR'] = URI.joinPath(nodeModulesUri, '@microsoft', 'mxc-sdk', 'bin').fsPath;
 
-			// Add VS Code's built-in ripgrep to PATH so the CLI subprocess can find it.
+			// Add Evacode's built-in ripgrep to PATH so the CLI subprocess can find it.
 			const rgDir = dirname(resolvedRgDiskPath);
 			// On Windows the env key is typically "Path" (not "PATH"). Since we copied
 			// process.env into a plain (case-sensitive) object, we must find the actual key.
@@ -4262,7 +4262,7 @@ export class CopilotAgent extends Disposable implements IAgent {
 	/**
 	 * Whether the user archived this session in the extension host list, or
 	 * `undefined` when the current state cannot be established (unreadable or
-	 * malformed marker, or one that no longer identifies a VS Code legacy chat).
+	 * malformed marker, or one that no longer identifies a Evacode legacy chat).
 	 * Callers that would commit to the state must not treat that as unarchived.
 	 */
 	private async _readExtensionHostCliArchiveState(sessionId: string): Promise<{ archived: boolean | undefined; diagnostics: IExtensionHostCliMarkerRead['diagnostics'] }> {
@@ -4448,7 +4448,7 @@ export class CopilotAgent extends Disposable implements IAgent {
 				await projectFromCopilotContext({ cwd: (adoptedWorktree?.repositoryRoot ?? workingDirectory).fsPath }, this._gitService),
 				sessionId,
 			);
-			// Title precedence mirrors the extension's getSessionTitleImpl: the CLI `name`, then the VS Code staged title, then the summary.
+			// Title precedence mirrors the extension's getSessionTitleImpl: the CLI `name`, then the Evacode staged title, then the summary.
 			const customTitle = await this._readExtensionHostCliCustomTitle(sessionId);
 			// The SDK's typed metadata omits `name`; it is present at runtime as the `workspace.yaml` title.
 			const sdkName = (sdkMetadata as { readonly name?: string } | undefined)?.name;
@@ -4463,7 +4463,7 @@ export class CopilotAgent extends Disposable implements IAgent {
 				this._logService.warn(`[Copilot] Adoption skipped for ${sessionId}: its extension-host marker could not be re-read, so the archived state is unknown`);
 				return { adopted: false, eligible: true, reason: 'markerUnavailable', diagnostics };
 			}
-			// Seed VS Code-layer metadata only — the SDK event log on disk is
+			// Seed Evacode-layer metadata only — the SDK event log on disk is
 			// untouched. Writing `agentSessionData/<sanitizedId>/session.db` here
 			// is also what makes the legacy extension-host Copilot CLI list stop
 			// showing this session (it dedups against agent-host-owned session ids).
@@ -4541,7 +4541,7 @@ export class CopilotAgent extends Disposable implements IAgent {
 	 *
 	 * Only ever called from {@link ensureChatAdopted} once a legacy extension-host
 	 * Copilot CLI session has passed every eligibility gate and is actually being
-	 * migrated — no native or non-VS Code Copilot session's usage is read or written.
+	 * migrated — no native or non-Evacode Copilot session's usage is read or written.
 	 */
 	private async _adoptLegacyTurnUsage(session: URI, sessionId: string): Promise<void> {
 		// Absent for sessions predating the extension host's credit tracking, so a

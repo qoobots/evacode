@@ -2406,7 +2406,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		} else {
 			resource = URI.file(cwd);
 		}
-		// In VS Code web (server-linux-x64-web accessed via browser), remoteAuthority
+		// In Evacode web (server-linux-x64-web accessed via browser), remoteAuthority
 		// is falsy from the terminal's perspective, so URI.file() is used above.
 		// The browser FileService has no file:// provider registered (only the remote
 		// provider), so guard with canHandleResource before calling exists() to avoid
@@ -2805,7 +2805,7 @@ export class TerminalLabelComputer extends Disposable {
 			shellCommand: commandDetection?.executingCommand && commandDetection.executingCommandConfidence === 'high' && promptInputModel
 				? promptInputModel.value + nonTaskSpinner
 				: undefined,
-			// Shell prompt input does not require high confidence as it's largely for VS Code developers
+			// Shell prompt input does not require high confidence as it's largely for Evacode developers
 			shellPromptInput: commandDetection?.executingCommand && promptInputModel
 				? promptInputModel.getCombinedString(true) + nonTaskSpinner
 				: promptInputModel?.getCombinedString(true),

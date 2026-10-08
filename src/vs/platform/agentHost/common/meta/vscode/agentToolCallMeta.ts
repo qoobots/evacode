@@ -25,7 +25,7 @@ export interface IToolCallMeta {
 	readonly 'vscode.copilotSandboxNetworkRestrictions'?: ISandboxNetworkRestrictions;
 	readonly 'agentHost.sandboxBypass'?: boolean;
 	/**
-	 * VS Code rendering hint. `terminal` routes the call to the command/output
+	 * Evacode rendering hint. `terminal` routes the call to the command/output
 	 * renderer, `subagent` to the subagent UI, `search` to the search renderer,
 	 * and `read` keeps incomplete resource arguments out of streaming display;
 	 * everything else falls through to the generic invocation renderer. Set by
@@ -93,7 +93,7 @@ export interface IToolSearchCandidate {
 }
 
 /**
- * The set of VS Code-recognized tool-call rendering kinds. Add a new value here
+ * The set of Evacode-recognized tool-call rendering kinds. Add a new value here
  * (and teach the renderer to handle it) rather than matching on tool name.
  */
 export type ToolKind = 'terminal' | 'subagent' | 'fusionPhase' | 'search' | 'read';

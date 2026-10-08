@@ -360,7 +360,7 @@ export class SettingsTreeSettingElement extends SettingsTreeElement {
 		// so we reset the default value source to the non-language-specific default value source for now.
 		this.defaultValueSource = this.setting.nonLanguageSpecificDefaultValueSource;
 
-		// Runtime restrictions affect presentation only; they are not VS Code configuration policies.
+		// Runtime restrictions affect presentation only; they are not Evacode configuration policies.
 		const policyValue = this.managedSettingsPresentationService.getValue(this.setting.key) ?? inspected.policyValue;
 		this.hasPolicyValue = policyValue !== undefined;
 		if (this.hasPolicyValue) {

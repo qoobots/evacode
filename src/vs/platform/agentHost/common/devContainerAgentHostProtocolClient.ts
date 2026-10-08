@@ -12,7 +12,7 @@ import type { IDevContainerAgentHostConfig, IDevContainerAgentHostConnectResult,
 import type { IRelayMessage } from './relayTransport.js';
 import type { IDevContainerSampleSource } from './devContainerSamples.js';
 
-/** Adapts the VS Code extension RPCs to the shared-process Dev Container service contract. */
+/** Adapts the Evacode extension RPCs to the shared-process Dev Container service contract. */
 export class DevContainerAgentHostProtocolClient extends Disposable implements IDevContainerAgentHostMainService {
 	declare readonly _serviceBrand: undefined;
 

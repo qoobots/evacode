@@ -164,7 +164,7 @@
 
 /*
  * Theme the native overflow scrollbar on the dialog body so it matches
- * the rest of VS Code. .dialog-message-container is the scroll host
+ * the rest of Evacode. .dialog-message-container is the scroll host
  * (see base/browser/ui/dialog/dialog.css). Without this the dialog
  * shows the platform's default scrollbar which clashes visually with
  * the chat input embedded above.

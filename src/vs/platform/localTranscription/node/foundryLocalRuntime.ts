@@ -18,7 +18,7 @@ import { CancellationError } from '../../../base/common/errors.js';
  * `foundry-local-sdk` ships two prebuilt N-API addons (`foundry_local_node.node`
  * and `foundry_local_preload.node`) and native libraries (Foundry Local + ONNX
  * Runtime + ONNX Runtime GenAI). These native files may require a newer glibc
- * than VS Code supports, so we republish the per-target payload to VS Code's CDN
+ * than Evacode supports, so we republish the per-target payload to Evacode's CDN
  * at build time (see `build/dictation-runtime/`) and download it here, at
  * runtime, into a per-user writable cache. This keeps the shipped package's
  * glibc floor intact and avoids any runtime dependency on the npm registry or
@@ -33,10 +33,10 @@ import { CancellationError } from '../../../base/common/errors.js';
  * shared libraries from this cache directory.
  *
  * NOTE: the single CDN download leg honors the standard proxy environment
- * variables (`HTTPS_PROXY`/`HTTP_PROXY`/`ALL_PROXY`, with `NO_PROXY`). VS Code's
+ * variables (`HTTPS_PROXY`/`HTTP_PROXY`/`ALL_PROXY`, with `NO_PROXY`). Evacode's
  * `http.proxy`/`http.noProxy` settings are applied as these same environment
  * variables before provisioning (see `LocalTranscriptionService.start`), so a
- * proxy configured only in VS Code is honored here and by the native model
+ * proxy configured only in Evacode is honored here and by the native model
  * download too; `http.proxyAuthorization` (Basic) is folded into the proxy URL
  * and `http.proxyStrictSSL === false` disables TLS verification for this leg.
  * TLS-intercepting proxies otherwise rely on the CA being in the OS trust store.
@@ -117,7 +117,7 @@ export async function ensureFoundryLocalRuntime(cacheRoot: string, download: IFo
 async function doEnsure(overrideDir: string, platformKey: string, download: IFoundryLocalRuntimeDownload, token: CancellationToken, onProgress?: FoundryLocalRuntimeProgress): Promise<string> {
 	// The completion marker is per-platform: the shared `<cacheRoot>/<version>`
 	// dir can hold payloads for multiple architectures (e.g. a win32-arm64
-	// machine running x64 VS Code under emulation, then arm64 VS Code). Verify
+	// machine running x64 Evacode under emulation, then arm64 Evacode). Verify
 	// the target-specific payload as well as the marker, so a different arch's
 	// marker never short-circuits this arch's provisioning and a stale/partially
 	// deleted cache is repaired rather than trusted.
@@ -146,7 +146,7 @@ async function doEnsure(overrideDir: string, platformKey: string, download: IFou
 export async function provisionRuntime(overrideDir: string, platformKey: string, urlTemplate: string, version: string, token: CancellationToken): Promise<void> {
 	const targetDir = foundryPrebuildDir(overrideDir, platformKey);
 
-	// The cache is shared by the utility processes of every open VS Code window,
+	// The cache is shared by the utility processes of every open Evacode window,
 	// so provision into a process-unique staging dir and atomically promote each
 	// payload directory into place. Two concurrent first-use downloads therefore
 	// never write to the same final path; whichever process wins the rename is
@@ -350,7 +350,7 @@ function detectGlibcVersion(): [number, number] | undefined {
  * Download the per-target runtime tarball from `url` and extract it into
  * `stagingDir`, which then contains
  * `prebuilds/<target>/<native files>`. The tarball is published
- * to VS Code's CDN by `build/dictation-runtime/`.
+ * to Evacode's CDN by `build/dictation-runtime/`.
  */
 async function downloadAndExtractTarball(url: string, stagingDir: string, token: CancellationToken): Promise<void> {
 	await fs.promises.mkdir(stagingDir, { recursive: true });

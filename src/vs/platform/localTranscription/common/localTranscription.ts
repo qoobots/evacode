@@ -113,16 +113,16 @@ export interface ILocalTranscriptionService {
 	 * selects the on-device Foundry Local model; when omitted the service default
 	 * is used. `language` optionally hints the spoken language.
 	 *
-	 * `proxyUrl`/`noProxy` bridge VS Code's `http.proxy`/`http.noProxy` settings
+	 * `proxyUrl`/`noProxy` bridge Evacode's `http.proxy`/`http.noProxy` settings
 	 * into this utility process: when set, they are applied as the standard proxy
 	 * environment variables before any download, so both the native runtime CDN
 	 * download and the Foundry Local *model* download route through the proxy.
 	 * When they are omitted, the process's inherited OS environment proxy vars
 	 * still apply.
 	 *
-	 * `proxyStrictSSL === false` (VS Code's `http.proxyStrictSSL`) disables TLS
+	 * `proxyStrictSSL === false` (Evacode's `http.proxyStrictSSL`) disables TLS
 	 * certificate verification for the JavaScript download legs. `proxyAuthorization`
-	 * (VS Code's `http.proxyAuthorization`, a `Basic <base64>` value) is folded into
+	 * (Evacode's `http.proxyAuthorization`, a `Basic <base64>` value) is folded into
 	 * the proxy URL's credentials so both our fetches and the native model download
 	 * authenticate to the proxy. TLS-intercepting proxies otherwise rely on the CA
 	 * being in the OS trust store (matching `@vscode/proxy-agent` and the desktop

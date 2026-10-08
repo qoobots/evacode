@@ -96,7 +96,7 @@ export function getChatGPTRateLimitResetHover(rateLimit: ICodexAccountRateLimitI
 	);
 }
 
-// Register the shared VS Code update entry in the Agents left titlebar actions.
+// Register the shared Evacode update entry in the Agents left titlebar actions.
 registerUpdateTitleBarMenuPlacement(Menus.TitleBarLeftLayout, {
 	group: 'navigation',
 	order: 2,

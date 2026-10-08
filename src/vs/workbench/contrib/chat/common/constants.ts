@@ -361,7 +361,7 @@ export function isSupportedChatFileScheme(accessor: ServicesAccessor, scheme: st
 }
 
 /**
- * Returns the effective default session type for a new chat in the VS Code
+ * Returns the effective default session type for a new chat in the Evacode
  * editor window.
  *
  * Virtual workspaces always default to {@link localChatSessionType}. Otherwise,

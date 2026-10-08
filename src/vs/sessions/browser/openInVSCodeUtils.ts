@@ -34,11 +34,11 @@ export function resolveDevContainerSourceWorkspace(provider: ISessionsProvider |
 }
 
 /**
- * Resolves the VS Code remote authority for the given session provider,
+ * Resolves the Evacode remote authority for the given session provider,
  * e.g. `ssh-remote+myhost` or `tunnel+myTunnel`.
  *
  * Returns `undefined` for local or WebSocket-only providers where no
- * VS Code remote extension can handle the connection.
+ * Evacode remote extension can handle the connection.
  */
 export function resolveRemoteAuthority(
 	providerId: string,

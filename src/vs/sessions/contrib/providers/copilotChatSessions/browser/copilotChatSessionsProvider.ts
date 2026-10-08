@@ -152,7 +152,7 @@ export interface ICopilotChatSession {
 	/** Checkpoints associated with this session, if any. */
 	readonly checkpoints: IObservable<IChatCheckpoints | undefined>;
 	readonly createdBySession?: IObservable<ISessionCreationReference | undefined>;
-	/** Whether this session is still treated as external to VS Code. Absent means `false`. */
+	/** Whether this session is still treated as external to Evacode. Absent means `false`. */
 	readonly isExternal?: IObservable<boolean>;
 
 	readonly initialAutomationSessionConfiguration?: IAutomationSessionConfiguration;
@@ -815,7 +815,7 @@ class AgentSessionAdapter implements ICopilotChatSession {
 	}
 
 	/**
-	 * The cloud provider marks tasks that were neither started nor adopted from VS Code. Sending
+	 * The cloud provider marks tasks that were neither started nor adopted from Evacode. Sending
 	 * a message adopts a task, and the refreshed metadata clears the mark.
 	 */
 	private _extractIsExternal(session: IAgentSession): boolean {

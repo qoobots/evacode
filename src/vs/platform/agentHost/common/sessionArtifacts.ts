@@ -52,7 +52,7 @@ export interface ISessionArtifact {
 
 /**
  * Reserved key under {@link SessionSummaryMeta} holding the aggregate artifacts
- * and references recorded across the session's chats. VS Code convention
+ * and references recorded across the session's chats. Evacode convention
  * layered on the protocol's generic `_meta` bag.
  */
 export const SESSION_META_ARTIFACTS_KEY = 'agentHost/sessionArtifacts';

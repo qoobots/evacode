@@ -500,7 +500,7 @@
 	gap: var(--vscode-spacing-size20);
 }
 
-/* Match VS Code chat-secondary-toolbar sizing for action items in the bottom row
+/* Match Evacode chat-secondary-toolbar sizing for action items in the bottom row
  * (e.g. session control pickers and repo config pickers) so they align with the
  * model picker font in the input toolbar. Each item carries its own opaque
  * surface so a chat background cannot show through it. */

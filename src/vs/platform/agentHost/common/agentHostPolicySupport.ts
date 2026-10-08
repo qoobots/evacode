@@ -30,7 +30,7 @@ export interface IAgentHostPolicySupport {
  * Status is conservative across delivery channels. The Copilot runtime reads
  * Copilot managed settings (GitHub organization settings, `com.github.copilot`
  * or `GitHubCopilot` native MDM, and `managed-settings.json`) itself; it does
- * not see values delivered only through VS Code policy. A policy the runtime
+ * not see values delivered only through Evacode policy. A policy the runtime
  * enforces only when delivered through Copilot managed settings is `partial`.
  *
  * This inventory is not a runtime enforcement certification. Source-confirmed
@@ -57,7 +57,7 @@ export const agentHostPolicySupport: Readonly<Record<string, IAgentHostPolicySup
 	ChatAgentSandboxAllowNetwork: { status: 'notApplicable' },
 	ChatAgentSandboxAllowUnsandboxedCommands: { status: 'notApplicable' },
 	// The default-on bridge covers supported denies and empty-list deny-all, but not allowlists
-	// or every VS Code domain pattern. #337538, #337539
+	// or every Evacode domain pattern. #337538, #337539
 	ChatAgentNetworkFilter: { status: 'partial' },
 	// Shared browser tools and the custom terminal sandbox consume the lists; native SDK
 	// sandboxing ignores them, and the permissions bridge does not translate allowlists.
@@ -69,9 +69,9 @@ export const agentHostPolicySupport: Readonly<Record<string, IAgentHostPolicySup
 	// #region MCP
 
 	// The workbench filters forwarded collections, but independent runtime discovery does not
-	// consult VS Code MCP access. #328241
+	// consult Evacode MCP access. #328241
 	ChatMCP: { status: 'partial' },
-	// Workbench server starts apply these restrictions, but VS Code-only values are not reverse-
+	// Workbench server starts apply these restrictions, but Evacode-only values are not reverse-
 	// forwarded to runtime discovery. Runtime-native managed-setting enforcement, including
 	// host-supplied servers and built-in exemptions, still needs execution verification. #328241
 	ChatAllowedMcpServers: { status: 'partial' },
@@ -93,18 +93,18 @@ export const agentHostPolicySupport: Readonly<Record<string, IAgentHostPolicySup
 	// Policy-disabled plugins are synchronized as a global customization decision, not an immutable
 	// policy floor: more specific session/workspace decisions can override it.
 	ChatEnabledPlugins: { status: 'partial' },
-	// Shared marketplace discovery and installation honor these settings. VS Code-only values do
+	// Shared marketplace discovery and installation honor these settings. Evacode-only values do
 	// not reach runtime-owned marketplace operations, whose enforcement needs separate verification.
 	// Extra marketplaces are additive; strict marketplaces do not disable already-installed plugins.
 	ChatExtraMarketplaces: { status: 'partial' },
 	ChatStrictMarketplaces: { status: 'partial' },
 	// The workbench filters synchronized customizations; independent runtime discovery is not
-	// governed by the VS Code-only value. Instructions are sent to the SDK too; runtime-native
+	// governed by the Evacode-only value. Instructions are sent to the SDK too; runtime-native
 	// lockdown across every customization type still needs execution verification.
 	ChatStrictPluginOnlyCustomization: { status: 'partial' },
 	// Documented as Local-only; Agent Host enables runtime file hooks regardless.
 	ChatHooks: { status: 'notEnforced' },
-	// Shared prompt discovery filters hooks, but VS Code-only values do not govern runtime file
+	// Shared prompt discovery filters hooks, but Evacode-only values do not govern runtime file
 	// hooks. Runtime-native enforcement and its effect on SDK callbacks remain unverified here.
 	ChatAllowManagedHooksOnly: { status: 'partial' },
 
@@ -152,7 +152,7 @@ export const agentHostPolicySupport: Readonly<Record<string, IAgentHostPolicySup
 	// Authenticated runtime account attribution still needs runtime adoption and verification;
 	// direct runtime exports use their own identity controls rather than the host's filter.
 	CopilotOtelCaptureIdentity: { status: 'partial' },
-	// Missing from VS Code policy forwarding. Runtime-native telemetry policy does not establish
+	// Missing from Evacode policy forwarding. Runtime-native telemetry policy does not establish
 	// enforcement for the host's own telemetry pipeline; that coverage remains unverified here.
 	CopilotOtelHeaders: { status: 'partial' },
 	// Mirrored into the root config of every host.
@@ -167,7 +167,7 @@ export const agentHostPolicySupport: Readonly<Record<string, IAgentHostPolicySup
 	DictationEnabled: { status: 'enforced' },
 	DictationLLMCleanup: { status: 'enforced' },
 	DictationModel: { status: 'enforced' },
-	// Governs VS Code extensions, their updater and gallery, not SDK runtime extensions/plugins.
+	// Governs Evacode extensions, their updater and gallery, not SDK runtime extensions/plugins.
 	AllowedExtensions: { status: 'enforced' },
 	ExtensionsAutoUpdate: { status: 'enforced' },
 	ExtensionsAutoUpdateDelay: { status: 'enforced' },

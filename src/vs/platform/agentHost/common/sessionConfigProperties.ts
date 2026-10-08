@@ -26,7 +26,7 @@ function getEnumProperty(schema: SessionConfigSchema | undefined, key: string, v
 		? { key, schema: property } : undefined;
 }
 
-/** A published VS Code key wins even if its shape requires the generic picker. */
+/** A published Evacode key wins even if its shape requires the generic picker. */
 export function getSessionApprovalProperty(schema: SessionConfigSchema | undefined): ISessionConfigProperty | undefined {
 	return schema && Object.hasOwn(schema.properties, SessionConfigKey.AutoApprove)
 		? getEnumProperty(schema, SessionConfigKey.AutoApprove, KNOWN_AUTO_APPROVE_VALUES, 'default')

@@ -40,7 +40,7 @@
 	overflow: auto;
 }
 
-/* VS Code styled scrollbars for any scrollable region in the wizard */
+/* Evacode styled scrollbars for any scrollable region in the wizard */
 .issue-reporter-wizard *::-webkit-scrollbar,
 .issue-reporter-wizard ::-webkit-scrollbar {
 	width: 10px;

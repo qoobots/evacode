@@ -101,7 +101,7 @@
 }
 
 /* Respect reduced-motion preferences: no sliding/fading of cells. Hosts that gate motion
- * with their own class (e.g. VS Code's `.monaco-enable-motion`) can add an equivalent rule. */
+ * with their own class (e.g. Evacode's `.monaco-enable-motion`) can add an equivalent rule. */
 @media (prefers-reduced-motion: reduce) {
 	.monaco-segmented-icon-toggle-cell {
 		transition: none;

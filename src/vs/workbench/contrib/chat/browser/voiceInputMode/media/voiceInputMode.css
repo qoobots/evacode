@@ -29,7 +29,7 @@
 	background: var(--vscode-toolbar-hoverBackground, transparent);
 }
 
-/* VS Code gates motion with `.monaco-enable-motion`; disable the cell slide/fade when it's off. */
+/* Evacode gates motion with `.monaco-enable-motion`; disable the cell slide/fade when it's off. */
 .monaco-workbench:not(.monaco-enable-motion) .chat-voice-input-mode-cell {
 	transition: none;
 }

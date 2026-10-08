@@ -140,7 +140,7 @@ export interface IMcpCustomizationControllerOptions {
 	 */
 	readonly resolveProvenance?: (serverName: string) => IMcpServerProvenance | undefined;
 	/**
-	 * Returns the VS Code setting that controls whether this host includes a server it adds itself, given the
+	 * Returns the Evacode setting that controls whether this host includes a server it adds itself, given the
 	 * server's current provenance. Published so clients can offer the setting without guessing from the name.
 	 */
 	readonly controllingSetting?: (serverName: string, provenance: IMcpServerProvenance) => string | undefined;

@@ -34,7 +34,7 @@ const ENTRA_GITHUB_AUDIENCE_SCOPE = '12f6db80-0741-4a7e-b9c5-b85d737b3a31/.defau
 
 /**
  * Asks the Microsoft provider for silent tokens from the work or school accounts the native broker
- * knows about, including accounts the user has not yet allowed VS Code to use. Handled in
+ * knows about, including accounts the user has not yet allowed Evacode to use. Handled in
  * `extensions/microsoft-authentication`.
  */
 const INCLUDE_UNAPPROVED_ACCOUNTS_OPTION = `${WORKBENCH_ONLY_SESSION_OPTION_PREFIX}IncludeUnapprovedAccounts`;
@@ -43,7 +43,7 @@ const INCLUDE_UNAPPROVED_ACCOUNTS_OPTION = `${WORKBENCH_ONLY_SESSION_OPTION_PREF
  * Asks the GitHub provider whether GitHub links the Entra identity behind any of the given tokens
  * to a GitHub account. Handled in `extensions/github-authentication`, which revokes the token it
  * mints to find out when the GitHub host and the build allow it. Where they do not, such as in
- * Code - OSS (no client secret) or on a host without the revocation endpoint, the token is left
+ * Evacode (no client secret) or on a host without the revocation endpoint, the token is left
  * to expire on its own.
  */
 const ENTRA_EXCHANGE_PROBE_OPTION = `${WORKBENCH_ONLY_SESSION_OPTION_PREFIX}EntraExchangeProbe`;

@@ -235,7 +235,7 @@
  * Regex-fallback syntax-highlighting token styles. Used when the
  * sessions workbench has no real Monaco tokenizer for the language
  * (TextMate grammars aren't loaded in this layer). Per-theme palettes
- * mirror VS Code's Light+ / Dark+ defaults so the diff blends in with
+ * mirror Evacode's Light+ / Dark+ defaults so the diff blends in with
  * the rest of the workbench. These classes are emitted by
  * `regexTokenizeLine` in `mobileDiffView.ts`.
  *

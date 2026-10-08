@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-/* Overrides for the new-chat-in-session view to match VS Code chat input styling */
+/* Overrides for the new-chat-in-session view to match Evacode chat input styling */
 
 /* Keep the composer vertically centered like the new-session view. */
 .new-chat-in-session .new-chat-widget-container,
@@ -11,7 +11,7 @@
 	padding: 0;
 }
 
-/* Match VS Code interactive-input-part layout */
+/* Match Evacode interactive-input-part layout */
 .new-chat-in-session .new-chat-widget-content {
 	width: 100%;
 	max-width: 950px;
@@ -28,7 +28,7 @@
 .new-chat-in-session .new-chat-input-area {
 	max-width: 950px;
 }
-/* Match VS Code interactive-input-part margin and padding */
+/* Match Evacode interactive-input-part margin and padding */
 .new-chat-in-session .new-chat-input-container {
 	margin-top: 0;
 }
@@ -57,7 +57,7 @@
 	border-radius: var(--chat-input-stack-radius-top, var(--vscode-cornerRadius-large, 8px)) var(--chat-input-stack-radius-top, var(--vscode-cornerRadius-large, 8px)) 0 0;
 }
 
-/* Bottom container: match VS Code secondary toolbar */
+/* Bottom container: match Evacode secondary toolbar */
 .new-chat-in-session .new-chat-bottom-container {
 	padding: 0 4px 0 5px;
 	margin-top: 4px;
@@ -77,7 +77,7 @@
 	gap: 10px;
 }
 
-/* Picker labels: match VS Code chat-secondary-toolbar sizing for all pickers */
+/* Picker labels: match Evacode chat-secondary-toolbar sizing for all pickers */
 .new-chat-in-session .new-chat-bottom-container .action-label:not(.separator),
 .new-chat-in-session .sessions-chat-toolbar .action-label {
 	height: var(--chat-input-control-height);

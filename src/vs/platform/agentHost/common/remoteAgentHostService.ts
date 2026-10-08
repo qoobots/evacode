@@ -57,7 +57,7 @@ export type RemoteAgentHostConnectionStatus =
 		/**
 		 * JSON-RPC method the server has advertised via `_meta` that the
 		 * client may invoke to ask the hosting CLI to upgrade the server.
-		 * Set only when the server was spawned by a VS Code CLI willing
+		 * Set only when the server was spawned by a Evacode CLI willing
 		 * to receive upgrade signals.
 		 */
 		readonly vscodeUpgradeMethod?: string;
@@ -165,13 +165,13 @@ export interface IRemoteAgentHostSSHConnection {
 	 * SSH config host alias (e.g. `myserver`). When set, the SSH tunnel is
 	 * automatically re-established on startup using the user's SSH config.
 	 * This takes precedence over {@link hostName} when constructing the
-	 * VS Code Remote SSH authority.
+	 * Evacode Remote SSH authority.
 	 */
 	readonly sshConfigHost?: string;
 	/**
 	 * The actual SSH hostname or IP address of the remote machine
 	 * (e.g. `myserver.example.com`). This is the host that the SSH
-	 * client connects to, and is used to construct the VS Code Remote
+	 * client connects to, and is used to construct the Evacode Remote
 	 * SSH authority when {@link sshConfigHost} is not available.
 	 */
 	readonly hostName: string;
@@ -197,7 +197,7 @@ export interface IRemoteAgentHostTunnelConnection {
 	readonly clusterId: string;
 	/**
 	 * User-defined display name for this tunnel (derived from tunnel tags).
-	 * Used as the tunnel name in the VS Code Remote Tunnels authority
+	 * Used as the tunnel name in the Evacode Remote Tunnels authority
 	 * (e.g. `tunnel+<label>`). Falls back to {@link tunnelId} if not set.
 	 */
 	readonly label?: string;
@@ -239,7 +239,7 @@ export type IRemoteAgentHostDevContainerConnection = {
 	readonly type: RemoteAgentHostEntryType.DevContainer;
 	/** Stable address for the container connection. */
 	readonly address: string;
-	/** VS Code SSH, tunnel, or WSL authority of the source host, absent for local containers. */
+	/** Evacode SSH, tunnel, or WSL authority of the source host, absent for local containers. */
 	readonly hostAuthority?: string;
 } & ({ readonly hostPath: string; readonly repository?: never } | { readonly repository: IDevContainerRepository; readonly hostPath?: never });
 

@@ -55,7 +55,7 @@
 	height: 100%;
 	cursor: pointer;
 	touch-action: manipulation;
-	/* Match the VS Code window command center title which is dimmed. */
+	/* Match the Evacode window command center title which is dimmed. */
 	opacity: 0.6;
 }
 

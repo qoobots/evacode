@@ -158,7 +158,7 @@ type AutomationDropData =
 
 /**
  * Card-style view of automations for the Agents window sessions grid.
- * Uses native VS Code components and styling patterns matching the
+ * Uses native Evacode components and styling patterns matching the
  * automationsListWidget in AI Customization.
  */
 export class AutomationsCardsWidget extends Disposable {

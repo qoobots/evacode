@@ -135,7 +135,7 @@
 	overflow: visible;
 }
 
-/* Each strip is a clipped vertical slice of the VS Code logo; staggered
+/* Each strip is a clipped vertical slice of the Evacode logo; staggered
  * translateY produces a sine wave traveling along the body (the swim).
  * Front strips (--agents-aquarium-strip-index ~ 0) keep the species color;
  * back strips mix toward white for depth shading. 720ms / 8 strips = 90ms

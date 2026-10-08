@@ -70,7 +70,7 @@ export class CodexChatDiscovery extends Disposable {
 		this._watchers.clear();
 		this._home = home;
 		const sessions = URI.joinPath(home, 'sessions');
-		// App-server fs/watch is shallow; VS Code's recursive watcher follows missing/replaced dated directories.
+		// App-server fs/watch is shallow; Evacode's recursive watcher follows missing/replaced dated directories.
 		this._watchers.add(this._fileService.onDidFilesChange(event => {
 			// Appending to an existing rollout only changes its transcript. A rollout add/delete can change the catalog.
 			if (event.affects(sessions, FileChangeType.ADDED, FileChangeType.DELETED)) {

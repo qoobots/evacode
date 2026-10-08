@@ -49,7 +49,7 @@ export const serverOptions: OptionDescriptions<Required<ServerParsedArgs>> = {
 	'server-data-dir': { type: 'string', cat: 'o', description: nls.localize('serverDataDir', "Specifies the directory that server data is kept in.") },
 	'telemetry-level': { type: 'string', cat: 'o', args: 'level', description: nls.localize('telemetry-level', "Sets the initial telemetry level. Valid levels are: 'off', 'crash', 'error' and 'all'. If not specified, the server will send telemetry until a client connects, it will then use the clients telemetry setting. Setting this to 'off' is equivalent to --disable-telemetry") },
 
-	/* ----- vs code options ---	-- */
+	/* ----- Evacode options ---	-- */
 
 	'user-data-dir': OPTIONS['user-data-dir'],
 	'enable-smoke-test-driver': OPTIONS['enable-smoke-test-driver'],
@@ -62,7 +62,7 @@ export const serverOptions: OptionDescriptions<Required<ServerParsedArgs>> = {
 	'force-disable-user-env': OPTIONS['force-disable-user-env'],
 	'enable-proposed-api': OPTIONS['enable-proposed-api'],
 
-	/* ----- vs code web options ----- */
+	/* ----- Evacode web options ----- */
 
 	'folder': { type: 'string', deprecationMessage: 'No longer supported. Folder needs to be provided in the browser URL or with `default-folder`.' },
 	'workspace': { type: 'string', deprecationMessage: 'No longer supported. Workspace needs to be provided in the browser URL or with `default-workspace`.' },
@@ -180,7 +180,7 @@ export interface ServerParsedArgs {
 
 	'disable-workspace-trust'?: boolean;
 
-	/* ----- vs code options ----- */
+	/* ----- Evacode options ----- */
 
 	'user-data-dir'?: string;
 
@@ -196,7 +196,7 @@ export interface ServerParsedArgs {
 	'force-disable-user-env'?: boolean;
 	'enable-proposed-api'?: string[];
 
-	/* ----- vs code web options ----- */
+	/* ----- Evacode web options ----- */
 
 	'default-workspace'?: string;
 	'default-folder'?: string;

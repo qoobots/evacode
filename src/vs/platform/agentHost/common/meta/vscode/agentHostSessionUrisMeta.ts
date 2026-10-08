@@ -10,7 +10,7 @@ import { ROOT_STATE_URI, type RootState } from '../../state/sessionState.js';
 export const AgentHostSessionUrisCapabilityMetaKey = 'vscode.ahpSessionUris';
 export const AgentHostNativeImplementationMetaKey = 'vscode.agentHost';
 
-/** Older native hosts identify their hosting VS Code CLI through the root's hostBuild payload. */
+/** Older native hosts identify their hosting Evacode CLI through the root's hostBuild payload. */
 export function isNativeAgentHost(result: InitializeResult | undefined, root?: RootState): boolean {
 	if (result?._meta?.[AgentHostNativeImplementationMetaKey] === true) {
 		return true;

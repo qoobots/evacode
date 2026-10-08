@@ -121,7 +121,7 @@ export interface IAgentHostMcpServer {
 	 */
 	readonly hostConfiguration?: IMcpServerConfiguration;
 	/**
-	 * VS Code setting the host declares as controlling whether it includes this server. Present only when
+	 * Evacode setting the host declares as controlling whether it includes this server. Present only when
 	 * the providing host says so; never inferred from the server's name.
 	 */
 	readonly controllingSettingId?: string;
@@ -135,7 +135,7 @@ export interface IAgentHostMcpServer {
 	readonly disabledReason?: CustomizationDisabledReason;
 	readonly status: McpServerStatus;
 	/**
-	 * True while the server is `AuthRequired` but VS Code is silently authenticating it (or has done so
+	 * True while the server is `AuthRequired` but Evacode is silently authenticating it (or has done so
 	 * and is waiting for the host to pick up the token). Clients show progress instead of a sign-in prompt.
 	 */
 	readonly authenticating?: boolean;
@@ -218,7 +218,7 @@ export interface IAgentHostSessionsProvider extends ISessionsProvider {
 	/**
 	 * Kind-scoped auto-start policy surfaced on the recovery screen. Present
 	 * on remote providers whose host can be started locally; omitted where
-	 * starting is not something VS Code can do.
+	 * starting is not something Evacode can do.
 	 */
 	readonly autoConnect?: IAgentHostAutoConnect;
 

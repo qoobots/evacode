@@ -7,7 +7,7 @@
 // See protocol.md for the full design.
 //
 // Most types are re-exported from the auto-generated protocol layer.
-// This file adds VS Code-specific additions (ISetAuthTokenParams, ProtocolError)
+// This file adds Evacode-specific additions (ISetAuthTokenParams, ProtocolError)
 // and backward-compatible aliases.
 
 // ---- Re-exports from protocol -----------------------------------------------
@@ -131,7 +131,7 @@ export function isJsonRpcResponse(msg: ProtocolMessage): msg is AhpSuccessRespon
 	return 'id' in msg && !('method' in msg);
 }
 
-// ---- VS Code-specific types ------------------------------------------------
+// ---- Evacode-specific types ------------------------------------------------
 
 /**
  * Error with a JSON-RPC error code for protocol-level failures.
@@ -144,7 +144,7 @@ export class ProtocolError extends Error {
 }
 
 /**
- * VS Code-specific extension: set the auth token on the server.
+ * Evacode-specific extension: set the auth token on the server.
  * Not yet part of the official protocol.
  */
 export interface ISetAuthTokenParams {

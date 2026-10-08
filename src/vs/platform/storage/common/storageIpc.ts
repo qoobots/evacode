@@ -32,7 +32,7 @@ export interface IBaseSerializableStorageRequest {
 
 	/**
 	 * Whether this request targets the application shared storage
-	 * that is shared across VS Code and Sessions app.
+	 * that is shared across Evacode and Sessions app.
 	 */
 	readonly applicationShared?: boolean;
 

@@ -79,7 +79,7 @@ export function withMcpServerSourcePluginMeta(meta: Record<string, unknown> | un
 }
 
 /**
- * Reads the VS Code setting a VS Code agent host declares as controlling whether it includes a server.
+ * Reads the Evacode setting a Evacode agent host declares as controlling whether it includes a server.
  * Only the host that owns the server can declare this; clients must not infer it from the server's name,
  * because another host can publish a server with the same name that the setting cannot control.
  */
@@ -88,7 +88,7 @@ export function readMcpServerControllingSetting(customization: McpServerCustomiz
 }
 
 /**
- * Records the VS Code setting that controls whether the host includes a server. An absent setting removes a
+ * Records the Evacode setting that controls whether the host includes a server. An absent setting removes a
  * previously recorded one; every other entry is preserved.
  */
 export function withMcpServerControllingSettingMeta(meta: Record<string, unknown> | undefined, settingId: string | undefined): Record<string, unknown> | undefined {
