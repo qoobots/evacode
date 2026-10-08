@@ -331,7 +331,11 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration)
 			[VerifyExtensionSignatureConfigKey]: {
 				type: 'boolean',
 				description: localize('extensions.verifySignature', "When enabled, extensions are verified to be signed before getting installed."),
-				default: true,
+				// Signature verification cannot run in this product because '@vscode/vsce-sign'
+				// is not shipped. Leaving this on would make every gallery install fail with
+				// "signature verification was not executed", require a manual confirmation and
+				// delete the downloaded VSIX. Keep it opt-in instead.
+				default: false,
 				scope: ConfigurationScope.APPLICATION,
 				included: isNative
 			},
