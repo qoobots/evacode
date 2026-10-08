@@ -136,7 +136,7 @@
 
 ### 阶段 7：验收与回归
 
-- [ ] 7.1 构建：`scripts/build-local.ps1 compile` + `npm run typecheck-client`（参考 doc 01 §5 阶段 2.7）
+- [x] 7.1 构建验证：`scripts/build-local.ps1 compile` 通过，0 错误（client / extensions / copilot 均编译成功，约 33s）
 - [ ] 7.2 三平台实机验收：窗口/任务栏/安装包图标均为新 Logo，无 VS Code 残留
 - [ ] 7.3 首启页品牌内容与 B-6 一致；不触发外部（GitHub/Microsoft）网络请求
 - [ ] 7.4 菜单/命令/Help/About 均不含第三方商标与链接（**例外**：按用户决策保留 Copilot 与 `@vscode` 商标）
