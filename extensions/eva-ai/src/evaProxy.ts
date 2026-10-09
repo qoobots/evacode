@@ -142,7 +142,15 @@ export class EvaLocalProxy implements vscode.Disposable {
 		const config = readConfig();
 
 		if (req.method === 'GET' && (path === '/v1/models' || path === '/models')) {
-			await this._forwardJson(config, accessToken, '/models', res);
+			await this._forwardJson(accessToken, aiUrl(config.aiBaseUrl, '/models'), res);
+			return;
+		}
+
+		// Diagnostic route: the versioned API publishes ids only, while the registry one level up is
+		// where EVA keeps per-model detail. Nothing calls this; it exists so the catalog can be read
+		// through the proxy, which is the only place a signed-in token is reachable from outside.
+		if (req.method === 'GET' && (path === '/v1/registry' || path === '/registry')) {
+			await this._forwardJson(accessToken, registryUrl(config.aiBaseUrl), res);
 			return;
 		}
 
@@ -178,8 +186,7 @@ export class EvaLocalProxy implements vscode.Disposable {
 		await this._send(target, accessToken, toUpstreamChatRequest(config, request), res, undefined);
 	}
 
-	private async _forwardJson(config: { readonly aiBaseUrl: string }, accessToken: string, path: string, res: http.ServerResponse): Promise<void> {
-		const target = aiUrl(config.aiBaseUrl, path);
+	private async _forwardJson(accessToken: string, target: URL, res: http.ServerResponse): Promise<void> {
 		const module = target.protocol === 'https:' ? https : http;
 		await new Promise<void>((resolve, reject) => {
 			const upstream = module.request(target, {
@@ -1148,6 +1155,11 @@ function parseSseFrame(frame: string): Record<string, unknown> | undefined {
  */
 function aiUrl(aiBaseUrl: string, path: string): URL {
 	return new URL(`${aiBaseUrl.replace(/\/+$/, '')}${path}`);
+}
+
+/** `/api/ai/v1` → `/api/ai/models`: the registry sits one level above the versioned chat API. */
+function registryUrl(aiBaseUrl: string): URL {
+	return new URL(`${aiBaseUrl.replace(/\/+$/, '').replace(/\/v\d+$/, '')}/models`);
 }
 
 function errorMessage(err: unknown): string {
