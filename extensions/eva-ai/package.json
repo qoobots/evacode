@@ -32,6 +32,14 @@
 			{
 				"command": "eva-ai.logout",
 				"title": "Eva AI: 退出登录"
+			},
+			{
+				"command": "eva-ai.startProxy",
+				"title": "Eva AI: 启动本地代理"
+			},
+			{
+				"command": "eva-ai.stopProxy",
+				"title": "Eva AI: 停止本地代理"
 			}
 		],
 		"languageModelChatProviders": [

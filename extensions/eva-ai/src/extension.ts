@@ -9,6 +9,7 @@ import { EvaAuthenticationProvider } from './evaAuthProvider';
 import { readConfig, type EvaConfig } from './evaConfig';
 import { streamChat, type EvaUsage } from './evaChat';
 import { AUTO_MODEL_ID, describeModel, fetchModels, limitsFor, orderModels, type EvaModelCatalog } from './evaModels';
+import { EvaLocalProxy } from './evaProxy';
 
 /**
  * Must match `contributes.languageModelChatProviders[].vendor` in package.json, otherwise the
@@ -58,6 +59,31 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 	const provider = new EvaLanguageModelChatProvider(auth, readConfig);
 	context.subscriptions.push(provider);
 	context.subscriptions.push(vscode.lm.registerLanguageModelChatProvider(VENDOR, provider));
+
+	const proxy = new EvaLocalProxy(auth);
+	context.subscriptions.push(proxy);
+	context.subscriptions.push(vscode.commands.registerCommand('eva-ai.startProxy', async () => {
+		try {
+			const info = await proxy.start();
+			await vscode.window.showInformationMessage(
+				`EVA 本地代理已启动：${info.baseUrl}\nKey：${info.key}`,
+				{ modal: true, detail: '外部 CLI 请把自己的 base_url 指向上面的地址，并用该 Key 鉴权。' },
+				'复制地址', '复制 Key',
+			).then(async choice => {
+				if (choice === '复制地址') {
+					await vscode.env.clipboard.writeText(`${info.baseUrl}/v1`);
+				} else if (choice === '复制 Key') {
+					await vscode.env.clipboard.writeText(info.key);
+				}
+			});
+		} catch (err) {
+			vscode.window.showErrorMessage(`EVA 代理启动失败：${errorMessage(err)}`);
+		}
+	}));
+	context.subscriptions.push(vscode.commands.registerCommand('eva-ai.stopProxy', async () => {
+		await proxy.stop();
+		vscode.window.showInformationMessage('EVA 本地代理已停止。');
+	}));
 
 	context.subscriptions.push(vscode.commands.registerCommand('eva-ai.login', async () => {
 		try {
