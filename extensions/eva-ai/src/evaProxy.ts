@@ -150,7 +150,7 @@ export class EvaLocalProxy implements vscode.Disposable {
 		// where EVA keeps per-model detail. Nothing calls this; it exists so the catalog can be read
 		// through the proxy, which is the only place a signed-in token is reachable from outside.
 		if (req.method === 'GET' && (path === '/v1/registry' || path === '/registry')) {
-			await this._forwardJson(accessToken, registryUrl(config.aiBaseUrl), res);
+			await this._forwardJson(accessToken, registryUrl(config.aiBaseUrl, url.search || '?page=1&size=1000'), res);
 			return;
 		}
 
@@ -1157,9 +1157,12 @@ function aiUrl(aiBaseUrl: string, path: string): URL {
 	return new URL(`${aiBaseUrl.replace(/\/+$/, '')}${path}`);
 }
 
-/** `/api/ai/v1` → `/api/ai/models`: the registry sits one level above the versioned chat API. */
-function registryUrl(aiBaseUrl: string): URL {
-	return new URL(`${aiBaseUrl.replace(/\/+$/, '').replace(/\/v\d+$/, '')}/models`);
+/**
+ * `/api/ai/v1` → `/api/ai/models/square`: the registry sits one level above the versioned chat API
+ * and is paginated, so a page big enough to hold the whole catalog is requested by default.
+ */
+function registryUrl(aiBaseUrl: string, query: string): URL {
+	return new URL(`${aiBaseUrl.replace(/\/+$/, '').replace(/\/v\d+$/, '')}/models/square${query}`);
 }
 
 function errorMessage(err: unknown): string {
