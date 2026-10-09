@@ -258,18 +258,12 @@ export function getChatSetupDialogButtons(entitlement: ChatEntitlement, options:
 	const button = (label: string, strategy: ChatSetupStrategy, ...classes: string[]): IChatSetupDialogButton => ({ label, strategy, classes });
 
 	if (offersProviderSignIn(entitlement, options)) {
-		const defaultProviderButton = button(localize('continueWith', "Continue with {0}", providers.default.name), ChatSetupStrategy.SetupWithoutEnterpriseProvider, 'continue-button', 'default');
-		const defaultProviderLink = button(defaultProviderButton.label, defaultProviderButton.strategy, 'link-button');
-		const enterpriseProviderButton = button(localize('continueWith', "Continue with {0}", providers.enterprise.name), ChatSetupStrategy.SetupWithEnterpriseProvider, 'continue-button', 'default');
-		const enterpriseProviderLink = button(enterpriseProviderButton.label, enterpriseProviderButton.strategy, 'link-button');
-		const googleProviderButton = button(localize('continueWith', "Continue with {0}", providers.google.name), ChatSetupStrategy.SetupWithGoogleProvider, 'continue-button', 'google');
-		const appleProviderButton = button(localize('continueWith', "Continue with {0}", providers.apple.name), ChatSetupStrategy.SetupWithAppleProvider, 'continue-button', 'apple');
-		const microsoftProviderButton = button(localize('continueWith', "Continue with {0}", providers.microsoft.name), ChatSetupStrategy.SetupWithMicrosoftProvider, 'continue-button', 'microsoft');
-
-		const socialProviderButtons = [googleProviderButton, appleProviderButton, ...(showMicrosoftProvider ? [microsoftProviderButton] : [])];
-		const providerButtons = enterpriseAuthentication
-			? [enterpriseProviderButton, ...socialProviderButtons, defaultProviderLink]
-			: [defaultProviderButton, ...socialProviderButtons, enterpriseProviderLink];
+		// This product signs in through the one provider it is built around. The alternatives the
+		// upstream dialog lists (Google, Apple, Microsoft, GHE) authenticate against accounts that
+		// do not exist here, so offering them would present dead ends as choices. The two remaining
+		// parameters still describe those alternatives and are kept for the callers that compute
+		// them, but nothing selects them any more.
+		const providerButtons = [button(localize('continueWith', "Continue with {0}", providers.default.name), ChatSetupStrategy.SetupWithoutEnterpriseProvider, 'continue-button', 'default')];
 		return options?.allowContinueWithoutSignIn
 			? [...providerButtons, button(localize('continueWithoutSigningIn', "Continue Without Signing In"), ChatSetupStrategy.Canceled, 'link-button')]
 			: providerButtons;
@@ -516,7 +510,9 @@ export class ChatSetup {
 		const dialog = this.instantiationService.createInstance(ChatSetupDialog, this.layoutService.activeContainer, {
 			title: this.getDialogTitle(options),
 			buttons,
-			icon: options?.dialogIcon ?? Codicon.copilotLarge,
+			// The provider mark used for this product's account everywhere else (see the onboarding
+		// sign-in step); the Copilot glyph it replaces belongs to the provider we signed out of.
+		icon: options?.dialogIcon ?? Codicon.account,
 			disableCloseButton: options?.disableCloseButton ?? false,
 			footer: getChatSetupDialogFooter(options?.forceAnonymous, this.telemetryService.telemetryLevel, this.defaultAccountService.resolveGitHubUrl(GitHubPaths.copilotSettings)),
 			extraClasses: options?.dialogExtraClasses,
@@ -548,7 +544,7 @@ export class ChatSetup {
 		}
 
 		if (this.context.state.entitlement === ChatEntitlement.Unknown || options?.forceSignInDialog) {
-			return localize('signIn', "Sign in to use GitHub Copilot");
+			return localize('signIn', "Sign in to use Evacode");
 		}
 
 		return localize('startUsing', "Start using AI Features");

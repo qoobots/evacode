@@ -144,7 +144,7 @@ suite('Chat setup dialog presentation', () => {
 			lastButton: buttons.at(-1),
 			footer,
 		}, {
-			buttonLabels: ['Continue with GitHub', 'Continue with Google', 'Continue with Apple', 'Continue with GHE', 'Continue Without Signing In'],
+			buttonLabels: ['Continue with GitHub', 'Continue Without Signing In'],
 			lastButton: {
 				label: 'Continue Without Signing In',
 				strategy: ChatSetupStrategy.Canceled,
@@ -165,17 +165,17 @@ suite('Chat setup dialog presentation', () => {
 		assert.strictEqual(footer, 'By continuing, you agree to GitHub\'s [Terms](https://example.com/terms) and [Privacy Statement](https://example.com/privacy). GitHub Copilot may show [public code](https://example.com/public-code) suggestions and use your data to improve the product. You can change these settings anytime.');
 	});
 
-	test('places Microsoft after the other providers and before the signed-out continuation', () => {
+	test('offers the default provider alone, whatever the removed alternatives are set to', () => {
 		assert.deepStrictEqual({
 			withMicrosoft: buttonLabels({ allowContinueWithoutSignIn: true }, false, true),
 			withoutMicrosoft: buttonLabels({ allowContinueWithoutSignIn: true }, false, false),
-			// The enterprise dialog offers the same social providers, in the same order, because
-			// every one of them signs in against whichever host the default account points at.
+			// The enterprise flag no longer reorders anything: there is no second provider to put
+			// first, so the dialog is the same whether or not an enterprise host is configured.
 			enterprise: buttonLabels({}, true, true),
 		}, {
-			withMicrosoft: ['Continue with GitHub', 'Continue with Google', 'Continue with Apple', 'Continue with Microsoft', 'Continue with GHE', 'Continue Without Signing In'],
-			withoutMicrosoft: ['Continue with GitHub', 'Continue with Google', 'Continue with Apple', 'Continue with GHE', 'Continue Without Signing In'],
-			enterprise: ['Continue with GHE', 'Continue with Google', 'Continue with Apple', 'Continue with Microsoft', 'Continue with GitHub'],
+			withMicrosoft: ['Continue with GitHub', 'Continue Without Signing In'],
+			withoutMicrosoft: ['Continue with GitHub', 'Continue Without Signing In'],
+			enterprise: ['Continue with GitHub'],
 		});
 	});
 

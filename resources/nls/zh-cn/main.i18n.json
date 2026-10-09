@@ -13743,7 +13743,7 @@
 			"settings": "继续操作即表示你同意 {0} 的[条款]({1})和[隐私声明]({2})。{3} Copilot 可能会显示[公共代码]({4})建议并使用你的数据来改进产品。你可以随时更改这些[设置]({5})。",
 			"settingsAnonymous": "继续操作即表示你同意 {0} 的[条款]({1})和[隐私声明]({2})。",
 			"setupAIButton": "使用 AI 功能",
-			"signIn": "登录以使用 GitHub Copilot",
+			"signIn": "登录以使用 Evacode",
 			"startUsing": "开始使用 AI 功能"
 		},
 		"vs/workbench/contrib/chat/browser/chatSlashCommands": {
