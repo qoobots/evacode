@@ -47,6 +47,23 @@ export interface CliModelSlots {
 	readonly fable: string;
 }
 
+/**
+ * Which EVA model each Claude Code tier runs on. Stated, not derived: the registry can publish what
+ * a model can do, never which tier it belongs to, and every rule inferred from ids picked one wrong
+ * — `qwen-max` reads like a flagship and is a 32k model that cannot reason.
+ *
+ * Sonnet carries everyday coding, Opus the heavy engineering, Haiku the high-frequency background
+ * steps (titles, summaries, sub-calls), and Fable is the ceiling: the multimodal flagship, kept for
+ * the work the others cannot do — screenshots and diagrams — and reachable by hand when they fall
+ * short. All four are current-generation and tool-capable at 1M tokens of context.
+ */
+export const CLI_TIER_MODELS: CliModelSlots = {
+	main: 'qwen3.7-plus',
+	opus: 'deepseek-v4-pro-0813',
+	haiku: 'qwen3.8-flash',
+	fable: 'qwen3.8-max',
+};
+
 export async function applyCliConfig(target: EvaCliTarget, proxy: EvaProxyInfo, models: CliModelSlots): Promise<void> {
 	await backup(target.file);
 	switch (target.id) {

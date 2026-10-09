@@ -10,7 +10,7 @@ import { readConfig, type EvaConfig } from './evaConfig';
 import { streamChat, type EvaUsage } from './evaChat';
 import { AUTO_MODEL_ID, describeModel, fetchModels, limitsFor, orderModels, type EvaModelCatalog } from './evaModels';
 import { EvaLocalProxy } from './evaProxy';
-import { applyCliConfig, cliTargets, restoreCliConfig, type CliModelSlots } from './evaCliConfig';
+import { applyCliConfig, cliTargets, CLI_TIER_MODELS, restoreCliConfig, type CliModelSlots } from './evaCliConfig';
 
 /**
  * Must match `contributes.languageModelChatProviders[].vendor` in package.json, otherwise the
@@ -87,64 +87,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 	}));
 
 	/**
-	 * `qwen3.8-max` → 3.8. Compared only within a vendor: capability tags do not distinguish
-	 * generations, so without this an obsolete release wins on a coin toss — `qwen3.7-plus` and
-	 * `qwen3.8-max` carry identical tags and contexts.
-	 */
-	function versionOf(code: string): number {
-		const match = code.match(/\d+(?:\.\d+)?/);
-		return match ? Number.parseFloat(match[0]) : 0;
-	}
-
-	/**
-	 * `max`/`pro` outrank `plus`, which outranks `flash`/`turbo` — the light variants are cheaper
-	 * and faster, so they must not take the main slot from a same-generation flagship.
-	 */
-	function tierOf(code: string): number {
-		if (/max|pro|ultra/i.test(code)) {
-			return 2;
-		}
-		return /flash|turbo|lite|mini/i.test(code) ? 0 : 1;
-	}
-
-	interface ModelDetail {
-		readonly code: string;
-		readonly provider: string;
-		readonly type: string;
-		readonly capabilities: readonly string[];
-		readonly contextWindow: number;
-	}
-
-	/**
-	 * Reads EVA's own registry, the one place capability is published — the versioned `/models`
-	 * route returns bare ids. Yields an empty list on any failure so selection degrades to names
-	 * rather than failing the command.
-	 */
-	async function fetchModelDetails(): Promise<ModelDetail[]> {
-		const token = await auth.getAccessToken();
-		if (!token) {
-			return [];
-		}
-		const url = `${readConfig().aiBaseUrl.replace(/\/+$/, '').replace(/\/v\d+$/, '')}/models/square?page=1&size=1000`;
-		try {
-			const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-			if (!response.ok) {
-				return [];
-			}
-			const raw = await response.json() as { data?: { content?: Array<Record<string, unknown>> } };
-			return (raw.data?.content ?? []).map(row => ({
-				code: String(row.modelCode ?? ''),
-				provider: String(row.providerCode ?? ''),
-				type: String(row.modelType ?? ''),
-				capabilities: Array.isArray(row.capabilities) ? row.capabilities.map(String) : [],
-				contextWindow: typeof row.contextWindow === 'number' ? row.contextWindow : 0,
-			}));
-		} catch {
-			return [];
-		}
-	}
-
-	/**
 	 * One model per Claude Code tier, each from a different vendor: the tiers are independent slots
 	 * the picker renders as separate entries, and four sizes of one family read like a menu but
 	 * behave like one model. Within a vendor the strongest published entry wins, so an obsolete
@@ -161,43 +103,24 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 				return undefined;
 			}
 
-			const details = await fetchModelDetails();
-			// kimi-k3 answers 400 to any request carrying `temperature`, which Claude Code sends, and
-			// EVA publishes no marker for it — so it is named here instead of filtered by ability.
-			const unusable = new Set(['kimi-k3']);
-			// Tool use is not optional here: a tier without it fails the moment Claude Code calls one.
-			const usable = details
-				.filter(detail => ids.includes(detail.code)
-					&& detail.capabilities.includes('函数调用')
-					&& !unusable.has(detail.code))
-				.sort((a, b) => b.capabilities.length - a.capabilities.length
-					|| b.contextWindow - a.contextWindow
-					|| tierOf(b.code) - tierOf(a.code)
-					|| versionOf(b.code) - versionOf(a.code)
-					|| a.code.localeCompare(b.code));
-			if (!usable.length) {
-				return { main: anchor, opus: anchor, haiku: anchor, fable: anchor };
+			// Which model belongs in which tier is stated in CLI_TIER_MODELS, not recomputed here.
+			// What stays the gateway's to decide is availability: a model it no longer serves falls
+			// back to the one that does, so an id retired upstream cannot wedge the whole session.
+			const offered = new Set(ids);
+			const available = (id: string): string | undefined => offered.has(id) ? id : undefined;
+			const configured = readConfig().defaultModel;
+			const main = (configured && offered.has(configured) ? configured : undefined)
+				?? available(CLI_TIER_MODELS.main)
+				?? ids[0];
+			if (!main) {
+				return undefined;
 			}
-
-			// Tiers are filled for cost, not for maximum capability: the session runs on Sonnet, Opus
-			// is only worth its price when the user reaches for it, and Haiku — which writes session
-			// titles and summaries — must never be billed at flagship rates.
-			const providerOf = (code: string): string => usable.find(detail => detail.code === code)?.provider ?? '';
-			const main = usable.some(detail => detail.code === anchor) ? anchor : usable[0].code;
-			const mainVendor = providerOf(main);
-			const opus = usable.find(detail => detail.code !== main && detail.provider !== mainVendor)?.code ?? main;
-
-			const cheapest = usable
-				.filter(detail => detail.code !== main && detail.code !== opus)
-				.sort((a, b) => tierOf(a.code) - tierOf(b.code)
-					|| a.capabilities.length - b.capabilities.length
-					|| a.contextWindow - b.contextWindow);
-			const haiku = cheapest[0]?.code ?? main;
-			const taken = new Set([mainVendor, providerOf(opus), providerOf(haiku)]);
-			const fable = cheapest.find(detail => detail.code !== haiku && !taken.has(detail.provider))?.code
-				?? cheapest.find(detail => detail.code !== haiku)?.code
-				?? main;
-			return { main, opus, haiku, fable };
+			return {
+				main,
+				opus: available(CLI_TIER_MODELS.opus) ?? main,
+				haiku: available(CLI_TIER_MODELS.haiku) ?? main,
+				fable: available(CLI_TIER_MODELS.fable) ?? main,
+			};
 		} finally {
 			tokenSource.dispose();
 		}
