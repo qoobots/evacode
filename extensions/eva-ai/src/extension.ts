@@ -235,6 +235,21 @@ class EvaLanguageModelChatProvider implements vscode.LanguageModelChatProvider, 
 		return this.defaultModelId ?? AUTO_MODEL_ID;
 	}
 
+	/**
+	 * Returns an access token, signing the user in when there is no session yet.
+	 *
+	 * Going through the authentication provider rather than telling the user to run a command is
+	 * deliberate: signing in this way creates a real session, and a session is the only thing that
+	 * makes EVA appear in the accounts menu. VS Code lists *accounts*, not registered providers -
+	 * `GlobalCompositeBar.addAccountsFromProvider` drops any provider whose `getSessions()` is empty,
+	 * so a merely-registered provider stays invisible until the first sign-in. `createIfNone` only
+	 * prompts when no session exists, so an already signed-in user never sees a dialog here.
+	 */
+	private async requestAccessToken(): Promise<string> {
+		const session = await vscode.authentication.getSession(AUTH_PROVIDER_ID, [], { createIfNone: true });
+		return session.accessToken;
+	}
+
 	async provideLanguageModelChatResponse(
 		model: vscode.LanguageModelChatInformation,
 		messages: readonly vscode.LanguageModelChatRequestMessage[],
@@ -243,10 +258,7 @@ class EvaLanguageModelChatProvider implements vscode.LanguageModelChatProvider, 
 		token: vscode.CancellationToken,
 	): Promise<void> {
 		const config = this.getConfig();
-		const accessToken = await this.auth.getAccessToken();
-		if (!accessToken) {
-			throw new Error('尚未登录 Eva AI。请运行命令“Eva AI: 登录”后再发起对话。');
-		}
+		const accessToken = await this.requestAccessToken();
 
 		const controller = new AbortController();
 		const listener = token.onCancellationRequested(() => controller.abort());
