@@ -105,9 +105,9 @@ async function applyToCodex(file: string, proxy: EvaProxyInfo, model: string): P
 		`[model_providers.${CODEX_PROVIDER_NAME}]`,
 		`name = "EVA"`,
 		`base_url = "${proxy.baseUrl}/v1"`,
-		// Chat rather than Responses: the proxy terminates that wire today, and asking for
-		// Responses would route Codex at an endpoint that does not exist yet.
-		`wire_api = "chat"`,
+		// The proxy terminates the Responses wire now, so Codex stays on its native protocol
+		// (which carries reasoning summaries Codex expects) rather than the chat translation.
+		`wire_api = "responses"`,
 		`requires_openai_auth = false`,
 		`experimental_bearer_token = "${proxy.key}"`,
 		'',

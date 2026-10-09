@@ -121,7 +121,7 @@ export class EvaLocalProxy implements vscode.Disposable {
 
 	private async _handle(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
 		const url = new URL(req.url ?? '/', 'http://127.0.0.1');
-		const path = url.pathname.replace(/\/+$/, '') || '/';
+		const path = (url.pathname.replace(/\/+$/, '').replace(/^\/+/, '/')) || '/';
 
 		// Health stays unauthenticated so the CLIs can probe before we ever see a key.
 		if (path === '/healthz' || path === '/health') {
@@ -155,6 +155,12 @@ export class EvaLocalProxy implements vscode.Disposable {
 		if (req.method === 'POST' && (path === '/v1/messages' || path === '/messages')) {
 			const raw = await readBody(req);
 			await this._answerMessages(config, accessToken, safeJson(raw), res);
+			return;
+		}
+
+		if (req.method === 'POST' && (path === '/v1/responses' || path === '/responses')) {
+			const raw = await readBody(req);
+			await this._answerResponses(config, accessToken, safeJson(raw), res);
 			return;
 		}
 
@@ -196,13 +202,36 @@ export class EvaLocalProxy implements vscode.Disposable {
 		const target = new URL('/chat/completions', ensureSlash(config.aiBaseUrl));
 
 		if (request.stream !== true) {
-			const raw = await this._sendCollect(target, accessToken, upstreamBody);
-			writeJson(res, 200, toMessagesResult(safeJson(raw), model));
+			const { status, body } = await this._sendCollect(target, accessToken, upstreamBody);
+			if (status !== 200) {
+				writeJson(res, status, requestToMessagesError(safeJson(body)));
+				return;
+			}
+			writeJson(res, 200, toMessagesResult(safeJson(body), model));
 			return;
 		}
 
 		const state = new MessageStreamState(model);
 		await this._send(target, accessToken, upstreamBody, res, frame => state.takeOpenAIFrame(frame));
+	}
+
+	private async _answerResponses(config: { readonly aiBaseUrl: string; readonly temperature: number | undefined }, accessToken: string, request: Record<string, unknown>, res: http.ServerResponse): Promise<void> {
+		const model = typeof request.model === 'string' ? request.model : 'eva';
+		const upstreamBody = toChatRequestFromResponses(config, request);
+		const target = new URL('/chat/completions', ensureSlash(config.aiBaseUrl));
+
+		if (request.stream !== true) {
+			const { status, body } = await this._sendCollect(target, accessToken, upstreamBody);
+			if (status !== 200) {
+				writeJson(res, status, requestToResponsesError(safeJson(body)));
+				return;
+			}
+			writeJson(res, 200, toResponsesResult(safeJson(body), model));
+			return;
+		}
+
+		const state = new ResponsesStreamState(model);
+		await this._send(target, accessToken, upstreamBody, res, frame => state.takeOpenAIFrame(frame), requestToResponsesError);
 	}
 
 	// #endregion
@@ -215,6 +244,7 @@ export class EvaLocalProxy implements vscode.Disposable {
 		body: unknown,
 		res: http.ServerResponse,
 		translate?: (frame: Record<string, unknown>) => string | undefined,
+		errorToDialect: (raw: Record<string, unknown>) => Record<string, unknown> = requestToMessagesError,
 	): Promise<void> {
 		const module = target.protocol === 'https:' ? https : http;
 		const payload = JSON.stringify(body);
@@ -246,8 +276,7 @@ export class EvaLocalProxy implements vscode.Disposable {
 					if (translate) {
 						// Upstream refused to stream (e.g. an error body); surface it in the
 						// caller's dialect rather than leaking OpenAI's shape to a Messages client.
-						const translated = requestToMessagesError(safeJson(raw));
-						writeJson(res, status, translated);
+						writeJson(res, status, errorToDialect(safeJson(raw)));
 					} else {
 						writeJsonRaw(res, status, raw || '{}');
 					}
@@ -259,7 +288,7 @@ export class EvaLocalProxy implements vscode.Disposable {
 		});
 	}
 
-	private _sendCollect(target: URL, accessToken: string, body: unknown): Promise<string> {
+	private _sendCollect(target: URL, accessToken: string, body: unknown): Promise<{ status: number; body: string }> {
 		const module = target.protocol === 'https:' ? https : http;
 		const payload = JSON.stringify(body);
 		return new Promise((resolve, reject) => {
@@ -271,7 +300,7 @@ export class EvaLocalProxy implements vscode.Disposable {
 					'authorization': `Bearer ${accessToken}`,
 				},
 			}, upstreamRes => {
-				void readBody(upstreamRes).then(resolve, reject);
+				void readBody(upstreamRes).then(raw => resolve({ status: upstreamRes.statusCode ?? 502, body: raw }), reject);
 			});
 			upstream.on('error', reject);
 			upstream.end(payload);
@@ -622,6 +651,378 @@ function requestToMessagesError(raw: Record<string, unknown>): Record<string, un
 	const error = raw.error as Record<string, unknown> | undefined;
 	const message = typeof error?.message === 'string' ? error.message : 'Upstream request failed.';
 	return { type: 'error', error: { type: 'api_error', message } };
+}
+
+// #endregion
+
+// #region OpenAI chat ⇄ OpenAI Responses
+
+/**
+ * Accumulates an OpenAI streaming reply and re-emits it as OpenAI Responses SSE, the wire Codex
+ * speaks natively. The event shape is heavier than Messages — every text span is a `message` output
+ * item with a `content_part`, and each tool call is its own `function_call` output item with
+ * `function_call_arguments` deltas — but the source stream is the same chat completion.
+ */
+class ResponsesStreamState {
+	private _started = false;
+	private _completed = false;
+	private _responseId = '';
+	private _messageOpen = false;
+	private _messageItemId = '';
+	private _text = '';
+	private readonly _toolBlocks = new Map<number, { itemId: string; callId: string; name: string; args: string; outputIndex: number }>();
+	private _toolNextIndex = 0;
+
+	constructor(private readonly _model: string) { }
+
+	takeOpenAIFrame(frame: Record<string, unknown>): string | undefined {
+		const chunk = (frame.choices as Array<Record<string, unknown>> | undefined)?.[0];
+		const out: string[] = [];
+
+		if (!this._started) {
+			this._started = true;
+			this._responseId = `resp_${frame.id ?? 'eva'}`;
+			out.push(frameFor('response.created', {
+				type: 'response.created',
+				response: { id: this._responseId, object: 'response', status: 'in_progress', model: this._model, output: [] },
+			}));
+		}
+
+		const delta = chunk?.delta as Record<string, unknown> | undefined;
+		if (delta) {
+			const reasoning = delta.reasoning_content ?? delta.reasoning;
+			if (typeof reasoning === 'string' && reasoning) {
+				this._emitText(out, reasoning);
+			}
+			if (typeof delta.content === 'string' && delta.content) {
+				this._emitText(out, delta.content);
+			}
+			for (const call of (delta.tool_calls as Array<Record<string, unknown>> | undefined) ?? []) {
+				const openaiIndex = typeof call.index === 'number' ? call.index : 0;
+				let tb = this._toolBlocks.get(openaiIndex);
+				if (!tb) {
+					this._finalizeMessage(out);
+					const callId = String(call.id ?? `call_${openaiIndex}`);
+					tb = {
+						itemId: `fc_${callId}`,
+						callId,
+						name: String((call.function as Record<string, unknown> | undefined)?.name ?? ''),
+						args: '',
+						outputIndex: (this._messageOpen ? 1 : 0) + this._toolNextIndex++,
+					};
+					this._toolBlocks.set(openaiIndex, tb);
+					out.push(frameFor('response.output_item.added', {
+						type: 'response.output_item.added',
+						output_index: tb.outputIndex,
+						item: { id: tb.itemId, type: 'function_call', status: 'in_progress', call_id: tb.callId, name: tb.name, arguments: '' },
+					}));
+				}
+				const args = (call.function as Record<string, unknown> | undefined)?.arguments;
+				if (typeof args === 'string' && args) {
+					tb.args += args;
+					out.push(frameFor('response.function_call_arguments.delta', {
+						type: 'response.function_call_arguments.delta',
+						item_id: tb.itemId,
+						output_index: tb.outputIndex,
+						delta: args,
+					}));
+				}
+			}
+		}
+
+		const finishReason = chunk?.finish_reason as string | null | undefined;
+		if (finishReason) {
+			this._finalize(frame, out);
+		} else if (frame.usage && !this._completed) {
+			// `include_usage` emits the token totals in a trailing chunk carrying no finish_reason;
+			// its arrival is what seals the response when the model ended without a distinct stop.
+			this._finalize(frame, out);
+		}
+		return out.length ? out.join('') : undefined;
+	}
+
+	private _emitText(out: string[], text: string): void {
+		if (!this._messageOpen) {
+			this._messageItemId = `msg_${Math.random().toString(36).slice(2, 12)}`;
+			this._messageOpen = true;
+			out.push(frameFor('response.output_item.added', {
+				type: 'response.output_item.added',
+				output_index: 0,
+				item: { id: this._messageItemId, type: 'message', status: 'in_progress', role: 'assistant', content: [] },
+			}));
+			out.push(frameFor('response.content_part.added', {
+				type: 'response.content_part.added',
+				item_id: this._messageItemId,
+				output_index: 0,
+				content_index: 0,
+				part: { type: 'output_text', text: '', annotations: [] },
+			}));
+		}
+		this._text += text;
+		out.push(frameFor('response.output_text.delta', {
+			type: 'response.output_text.delta',
+			item_id: this._messageItemId,
+			output_index: 0,
+			content_index: 0,
+			delta: text,
+		}));
+	}
+
+	private _finalizeMessage(out: string[]): void {
+		if (!this._messageOpen) {
+			return;
+		}
+		const text = this._text;
+		this._messageOpen = false;
+		out.push(frameFor('response.output_text.done', {
+			type: 'response.output_text.done',
+			item_id: this._messageItemId,
+			output_index: 0,
+			content_index: 0,
+			text,
+		}));
+		out.push(frameFor('response.content_part.done', {
+			type: 'response.content_part.done',
+			item_id: this._messageItemId,
+			output_index: 0,
+			content_index: 0,
+			part: { type: 'output_text', text, annotations: [] },
+		}));
+		out.push(frameFor('response.output_item.done', {
+			type: 'response.output_item.done',
+			output_index: 0,
+			item: { id: this._messageItemId, type: 'message', status: 'completed', role: 'assistant', content: [{ type: 'output_text', text, annotations: [] }] },
+		}));
+	}
+
+	private _finalize(frame: Record<string, unknown>, out: string[]): void {
+		if (this._completed) {
+			return;
+		}
+		this._completed = true;
+		this._finalizeMessage(out);
+		for (const tb of this._toolBlocks.values()) {
+			out.push(frameFor('response.function_call_arguments.done', {
+				type: 'response.function_call_arguments.done',
+				item_id: tb.itemId,
+				output_index: tb.outputIndex,
+				arguments: tb.args,
+			}));
+			out.push(frameFor('response.output_item.done', {
+				type: 'response.output_item.done',
+				output_index: tb.outputIndex,
+				item: { id: tb.itemId, type: 'function_call', status: 'completed', call_id: tb.callId, name: tb.name, arguments: tb.args },
+			}));
+		}
+		const usage = frame.usage as Record<string, number> | undefined;
+		out.push(frameFor('response.completed', {
+			type: 'response.completed',
+			response: {
+				id: this._responseId,
+				object: 'response',
+				status: 'completed',
+				model: this._model,
+				output: this._buildOutput(),
+				usage: { input_tokens: usage?.prompt_tokens ?? 0, output_tokens: usage?.completion_tokens ?? 0 },
+			},
+		}));
+	}
+
+	private _buildOutput(): Array<Record<string, unknown>> {
+		const output: Array<Record<string, unknown>> = [];
+		if (this._text !== '') {
+			output.push({
+				id: this._messageItemId,
+				type: 'message',
+				status: 'completed',
+				role: 'assistant',
+				content: [{ type: 'output_text', text: this._text, annotations: [] }],
+			});
+		}
+		for (const tb of this._toolBlocks.values()) {
+			output.push({
+				id: tb.itemId,
+				type: 'function_call',
+				status: 'completed',
+				call_id: tb.callId,
+				name: tb.name,
+				arguments: tb.args,
+			});
+		}
+		if (output.length === 0) {
+			output.push({
+				id: this._messageItemId || `msg_${Math.random().toString(36).slice(2, 12)}`,
+				type: 'message',
+				status: 'completed',
+				role: 'assistant',
+				content: [{ type: 'output_text', text: '', annotations: [] }],
+			});
+		}
+		return output;
+	}
+}
+
+/** Maps an OpenAI Responses request onto EVA's chat completion body. */
+function toChatRequestFromResponses(config: { readonly temperature: number | undefined }, request: Record<string, unknown>): Record<string, unknown> {
+	const messages = responsesInputToMessages(request.input);
+	if (typeof request.instructions === 'string' && request.instructions) {
+		messages.unshift({ role: 'system', content: request.instructions });
+	}
+	const body = toUpstreamChatRequest(config, request);
+	body.messages = messages;
+	if (Array.isArray(request.tools)) {
+		body.tools = responsesToolsToChat(request.tools);
+	}
+	if (typeof request.max_output_tokens === 'number') {
+		body.max_tokens = request.max_output_tokens;
+	}
+	if (request.tool_choice === 'required') {
+		body.tool_choice = 'required';
+	}
+	return body;
+}
+
+function responsesInputToMessages(input: unknown): Array<Record<string, unknown>> {
+	if (typeof input === 'string') {
+		return [{ role: 'user', content: input }];
+	}
+	const items = Array.isArray(input) ? input as Array<Record<string, unknown>> : [];
+	const messages: Array<Record<string, unknown>> = [];
+	let pendingToolCalls: Array<Record<string, unknown>> = [];
+
+	const flushAssistant = (content: string): void => {
+		if (pendingToolCalls.length) {
+			messages.push({ role: 'assistant', content: content || '', tool_calls: pendingToolCalls });
+			pendingToolCalls = [];
+		} else if (content) {
+			messages.push({ role: 'assistant', content });
+		}
+	};
+
+	for (const item of items) {
+		const type = item.type;
+		if (type === 'function_call') {
+			pendingToolCalls.push({
+				id: String(item.call_id ?? ''),
+				type: 'function',
+				function: { name: String(item.name ?? ''), arguments: typeof item.arguments === 'string' ? item.arguments : '' },
+			});
+			continue;
+		}
+		if (type === 'function_call_output') {
+			flushAssistant('');
+			messages.push({
+				role: 'tool',
+				tool_call_id: String(item.call_id ?? ''),
+				content: typeof item.output === 'string' ? item.output : JSON.stringify(item.output ?? ''),
+			});
+			continue;
+		}
+		if (type === 'message' || item.role) {
+			const role = String(item.role ?? 'user');
+			const content = responsesContentToText(item.content);
+			if (role === 'assistant') {
+				const calls = responsesAssistantToolCalls(item.content);
+				if (calls.length) {
+					messages.push({ role: 'assistant', content: content || '', tool_calls: calls });
+				} else {
+					messages.push({ role: 'assistant', content: content || '' });
+				}
+			} else {
+				messages.push({ role, content });
+			}
+		}
+	}
+	flushAssistant('');
+	return messages;
+}
+
+function responsesContentToText(content: unknown): string {
+	if (typeof content === 'string') {
+		return content;
+	}
+	const parts = Array.isArray(content) ? content as Array<Record<string, unknown>> : [];
+	return parts
+		.filter(part => part.type === 'output_text' || part.type === 'input_text' || part.type === 'text')
+		.map(part => String(part.text ?? ''))
+		.join('');
+}
+
+function responsesAssistantToolCalls(content: unknown): Array<Record<string, unknown>> {
+	const parts = Array.isArray(content) ? content as Array<Record<string, unknown>> : [];
+	return parts
+		.filter(part => part.type === 'function_call')
+		.map(part => ({
+			id: String(part.call_id ?? part.id ?? ''),
+			type: 'function',
+			function: { name: String(part.name ?? ''), arguments: typeof part.arguments === 'string' ? part.arguments : '' },
+		}));
+}
+
+function responsesToolsToChat(tools: unknown): Array<Record<string, unknown>> {
+	if (!Array.isArray(tools)) {
+		return [];
+	}
+	return (tools as Array<Record<string, unknown>>).map(tool => ({
+		type: 'function',
+		function: {
+			name: String(tool.name ?? ''),
+			description: typeof tool.description === 'string' ? tool.description : '',
+			parameters: tool.parameters ?? { type: 'object', properties: {} },
+		},
+	}));
+}
+
+/** Rewrites a buffered chat completion as a non-streaming Responses result. */
+function toResponsesResult(raw: Record<string, unknown>, model: string): Record<string, unknown> {
+	const choice = ((raw.choices as Array<Record<string, unknown>> | undefined) ?? [])[0];
+	const message = choice?.message as Record<string, unknown> | undefined;
+	const text = typeof message?.content === 'string' ? message.content : '';
+	const output: Array<Record<string, unknown>> = [];
+	if (text) {
+		output.push({
+			id: `msg_${String(raw.id ?? 'eva')}`,
+			type: 'message',
+			status: 'completed',
+			role: 'assistant',
+			content: [{ type: 'output_text', text, annotations: [] }],
+		});
+	}
+	for (const call of (message?.tool_calls as Array<Record<string, unknown>> | undefined) ?? []) {
+		const fn = call.function as Record<string, unknown> | undefined;
+		output.push({
+			id: `fc_${String(call.id ?? '')}`,
+			call_id: String(call.id ?? ''),
+			type: 'function_call',
+			status: 'completed',
+			name: String(fn?.name ?? ''),
+			arguments: typeof fn?.arguments === 'string' ? fn.arguments : '',
+		});
+	}
+	const usage = raw.usage as Record<string, number> | undefined;
+	const responseOutput = text || output.length
+		? output
+		: [{ id: `msg_${String(raw.id ?? 'eva')}`, type: 'message', status: 'completed', role: 'assistant', content: [{ type: 'output_text', text: '', annotations: [] }] }];
+	return {
+		id: `resp_${String(raw.id ?? 'eva')}`,
+		object: 'response',
+		created_at: Math.floor(Date.now() / 1000),
+		status: 'completed',
+		model,
+		output: responseOutput,
+		usage: {
+			input_tokens: usage?.prompt_tokens ?? 0,
+			output_tokens: usage?.completion_tokens ?? 0,
+			total_tokens: usage?.total_tokens ?? (usage?.prompt_tokens ?? 0) + (usage?.completion_tokens ?? 0),
+		},
+	};
+}
+
+/** Upstream refused to stream; surface it in the Responses dialect. */
+function requestToResponsesError(raw: Record<string, unknown>): Record<string, unknown> {
+	const error = raw.error as Record<string, unknown> | undefined;
+	const message = typeof error?.message === 'string' ? error.message : 'Upstream request failed.';
+	return { object: 'error', error: { type: 'api_error', message } };
 }
 
 // #endregion
