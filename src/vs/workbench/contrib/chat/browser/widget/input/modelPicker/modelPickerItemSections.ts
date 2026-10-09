@@ -64,19 +64,19 @@ export function buildUnavailableStateItems(options: IBuildModelPickerItemsOption
 	if (setupRequired) {
 		const enabled = !!options.actions.onRequestSetup;
 		const items: IActionListItem<IActionWidgetDropdownAction>[] = [
-			{ kind: ActionListItemKind.Header, label: localize('chat.modelPicker.setupRequired', "Sign in to use Copilot") },
+			{ kind: ActionListItemKind.Header, label: localize('chat.modelPicker.setupRequired', "Sign in to use Evacode") },
 			{
 				item: {
 					id: SETUP_REQUIRED_SIGN_IN_ACTION_ID,
 					enabled,
 					checked: false,
 					class: undefined,
-					tooltip: localize('chat.modelPicker.setupRequired.signInTooltip', "Sign in to GitHub Copilot to choose a model."),
-					label: localize('chat.modelPicker.setupRequired.signIn', "Sign in to use Copilot..."),
+					tooltip: localize('chat.modelPicker.setupRequired.signInTooltip', "Sign in to Evacode to choose a model."),
+					label: localize('chat.modelPicker.setupRequired.signIn', "Sign in to use Evacode..."),
 					run: () => options.actions.onRequestSetup?.(),
 				},
 				kind: ActionListItemKind.Action,
-				label: localize('chat.modelPicker.setupRequired.signIn', "Sign in to use Copilot..."),
+				label: localize('chat.modelPicker.setupRequired.signIn', "Sign in to use Evacode..."),
 				group: { title: '', icon: ThemeIcon.fromId(Codicon.signIn.id) },
 				disabled: !enabled,
 				hideIcon: false,

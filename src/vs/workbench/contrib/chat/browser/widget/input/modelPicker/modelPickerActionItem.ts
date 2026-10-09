@@ -224,7 +224,7 @@ export class ModelPickerActionItem extends BaseActionViewItem {
 			return localize('chat.modelPicker.restrictedHover', "{0} • Unavailable while in Restricted mode. Trust Workspace to enable models.", label);
 		}
 		if (this._pickerWidget.isSetupRequired()) {
-			return localize('chat.modelPicker.setupRequiredHover', "{0} • Sign in to GitHub Copilot to choose a model.", label);
+			return localize('chat.modelPicker.setupRequiredHover', "{0} • Sign in to Evacode to choose a model.", label);
 		}
 		const selectedModel = this._pickerWidget.selectedModel;
 		const { statusIcon, tooltip } = selectedModel?.metadata || {};

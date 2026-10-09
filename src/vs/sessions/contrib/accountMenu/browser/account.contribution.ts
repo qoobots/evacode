@@ -57,7 +57,6 @@ import { language } from '../../../../base/common/platform.js';
 import { AgentHostCodexAgentEnabledSettingId } from '../../../../platform/agentHost/common/agentService.js';
 import { ICodexAccountRateLimitInfo } from '../../../../platform/agentHost/common/codexAccount.js';
 import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSettings.js';
-import { CHAT_SETUP_ACTION_ID } from '../../../../workbench/contrib/chat/browser/actions/chatActions.js';
 import { AGENTIC_SIGN_IN_COMMAND_ID } from '../../../common/sessionCommands.js';
 import { SessionsChatPetAchievementBadges } from './chatPetAchievementBadges.js';
 import { CHAT_PET_OPEN_ACHIEVEMENTS_COMMAND_ID } from '../../../../workbench/contrib/chat/browser/chatPetAchievements.js';
@@ -111,7 +110,7 @@ registerAction2(class extends Action2 {
 	constructor() {
 		super({
 			id: AGENTIC_SIGN_IN_COMMAND_ID,
-			title: localize2('signIn', "Sign in with GitHub"),
+			title: localize2('signIn', "Sign in with Evacode"),
 			icon: Codicon.signIn,
 			menu: {
 				id: AccountMenu,
@@ -122,7 +121,7 @@ registerAction2(class extends Action2 {
 		});
 	}
 	async run(accessor: ServicesAccessor): Promise<void> {
-		await accessor.get(ICommandService).executeCommand(CHAT_SETUP_ACTION_ID);
+		await accessor.get(IDefaultAccountService).signIn();
 	}
 });
 
@@ -342,6 +341,7 @@ export class TitleBarAccountWidget extends BaseActionViewItem {
 			isAccountLoading: this.isAccountLoading,
 			accountName: this.accountName,
 			accountProviderLabel: this.accountProviderLabel,
+			accountProviderId: this.accountProviderId,
 			entitlement,
 			sentiment: this.chatEntitlementService.sentiment,
 			quotas: this.chatEntitlementService.quotas,
@@ -366,7 +366,7 @@ export class TitleBarAccountWidget extends BaseActionViewItem {
 		const titleBarIcon = state.dotBadge ? Codicon.account : state.icon;
 
 		this.avatarElement.classList.toggle('visible', hasLoadedAvatar);
-		this.avatarElement.alt = this.getAvatarAltText(hasLoadedAvatar);
+		this.avatarElement.alt = this.getAvatarAltText();
 		if (hasLoadedAvatar) {
 			if (this.avatarElement.src !== loadedAvatarUrl) {
 				this.avatarElement.src = loadedAvatarUrl;
@@ -386,11 +386,7 @@ export class TitleBarAccountWidget extends BaseActionViewItem {
 		this.renderCodexPanelAvatar();
 	}
 
-	private getAvatarAltText(hasLoadedAvatar: boolean): string {
-		if (hasLoadedAvatar && this.accountProviderId === 'github' && this.accountName) {
-			return localize('accountAvatarAlt', "GitHub profile image for {0}", this.accountName);
-		}
-
+	private getAvatarAltText(): string {
 		return localize('accountAvatarAltFallback', "Account profile image");
 	}
 
@@ -598,13 +594,13 @@ export class TitleBarAccountWidget extends BaseActionViewItem {
 		const identities = append(panel, $('.sessions-account-titlebar-panel-identities'));
 		if (this.accountName || this.isAccountLoading) {
 			const copilotAccount = append(identities, $('section.sessions-account-titlebar-panel-provider-account', {
-				'aria-label': localize('copilotAccountSectionLabel', "Copilot account")
+				'aria-label': localize('copilotAccountSectionLabel', "Evacode account")
 			}));
 			const copilotIdentity = append(copilotAccount, $('.sessions-account-titlebar-panel-provider-identity'));
 			const loadedAvatarUrl = !this.isAccountLoading ? this.loadedAvatarUrl : undefined;
 			if (loadedAvatarUrl) {
 				const avatar = append(copilotIdentity, $('img.sessions-account-titlebar-panel-provider-avatar', {
-					alt: this.getAvatarAltText(true),
+					alt: this.getAvatarAltText(),
 					draggable: 'false',
 					src: loadedAvatarUrl,
 				})) as HTMLImageElement;
@@ -612,7 +608,7 @@ export class TitleBarAccountWidget extends BaseActionViewItem {
 				avatar.referrerPolicy = 'no-referrer';
 			} else {
 				const accountIcon = append(copilotIdentity, $('span.sessions-account-titlebar-panel-provider-icon', { 'aria-hidden': 'true' }));
-				accountIcon.classList.add(...ThemeIcon.asClassNameArray(Codicon.github));
+				accountIcon.classList.add(...ThemeIcon.asClassNameArray(Codicon.account));
 			}
 			const title = append(copilotIdentity, $('div.sessions-account-titlebar-panel-provider-name'));
 			title.textContent = this.getPanelHeaderLabel();
@@ -645,11 +641,11 @@ export class TitleBarAccountWidget extends BaseActionViewItem {
 			this.appendCopilotUsage(copilotAccount, panelStore);
 		} else if (partitioned.signIn) {
 			const copilotAccount = append(identities, $('section.sessions-account-titlebar-panel-provider-account.signed-out', {
-				'aria-label': localize('copilotAccountSectionLabel', "Copilot account")
+				'aria-label': localize('copilotAccountSectionLabel', "Evacode account")
 			}));
 			const copilotIdentity = append(copilotAccount, $('.sessions-account-titlebar-panel-provider-identity'));
 			const accountIcon = append(copilotIdentity, $('span.sessions-account-titlebar-panel-provider-icon', { 'aria-hidden': 'true' }));
-			accountIcon.classList.add(...ThemeIcon.asClassNameArray(Codicon.github));
+			accountIcon.classList.add(...ThemeIcon.asClassNameArray(Codicon.account));
 			const signInActions = append(copilotIdentity, $('.sessions-account-titlebar-panel-provider-sign-in-actions'));
 			const signInActionBar = panelStore.add(new ActionBar(signInActions));
 			panelStore.add(signInActionBar.onWillRun(() => {

@@ -605,7 +605,7 @@ export class ChatStatusDashboard extends DomWidget {
 		} else if (disabled) {
 			descriptionText = localize('enableDescription', "Enable Copilot to use AI features.");
 		} else {
-			descriptionText = localize('signInDescription', "Sign in to use GitHub Copilot AI features.");
+			descriptionText = localize('signInDescription', "Sign in to use Evacode AI features.");
 		}
 
 		let buttonLabel: string;
@@ -616,7 +616,7 @@ export class ChatStatusDashboard extends DomWidget {
 		} else if (disabled) {
 			buttonLabel = localize('enableCopilotButton', "Enable AI Features");
 		} else {
-			buttonLabel = localize('signInToUseAIFeatures', "Sign in to use GitHub Copilot");
+			buttonLabel = localize('signInToUseAIFeatures', "Sign in to use Evacode");
 		}
 
 		let commandId: string;
