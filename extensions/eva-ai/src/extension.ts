@@ -86,10 +86,25 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 		vscode.window.showInformationMessage('EVA 本地代理已停止。');
 	}));
 
+	/** `deepseek-v4-pro-0813` → `deepseek`: the gateway reports ids only, so the vendor is inferred. */
+	function brandOf(id: string): string {
+		return id.split('-')[0].replace(/[\d.]/g, '');
+	}
+
+	/** First id from a vendor not already taken, preferring ones whose name matches `weight`. */
+	function pickTier(ids: readonly string[], used: Set<string>, weight: RegExp): string | undefined {
+		const fresh = (id: string): boolean => !used.has(brandOf(id));
+		const hit = ids.find(id => fresh(id) && weight.test(id)) ?? ids.find(fresh);
+		if (hit) {
+			used.add(brandOf(hit));
+		}
+		return hit;
+	}
+
 	/**
-	 * Picks one model per Claude Code tier from what the gateway actually offers. The tiers are
-	 * independent env slots the picker renders as separate entries, so they get distinct models
-	 * rather than four copies of the same one.
+	 * Picks one model per Claude Code tier from what the gateway actually offers. Each tier is an
+	 * independent slot the picker renders as its own entry, and a vendor per tier turns that into a
+	 * real choice: four sizes of the same family look like a menu but behave like one model.
 	 */
 	async function resolveCliModels(): Promise<CliModelSlots | undefined> {
 		const tokenSource = new vscode.CancellationTokenSource();
@@ -101,13 +116,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 			if (!main) {
 				return undefined;
 			}
-			// The gateway reports ids only, so weight has to be inferred from names; anything that
-			// does not match falls back to the main model instead of to something unvetted.
-			const opus = ids.find(id => /max/i.test(id)) ?? main;
-			const haiku = ids.find(id => /turbo|flash/i.test(id)) ?? main;
-			const taken = new Set([main, opus, haiku]);
-			const fable = ids.find(id => !taken.has(id)) ?? main;
-			return { main, opus, haiku, fable };
+			// Weight has to be read off the name, since the gateway exposes ids and nothing else;
+			// a tier that finds no fresh vendor falls back rather than to something unvetted.
+			const used = new Set([brandOf(main)]);
+			return {
+				main,
+				opus: pickTier(ids, used, /max|pro/i) ?? main,
+				haiku: pickTier(ids, used, /flash|turbo|lite|mini/i) ?? main,
+				fable: pickTier(ids, used, /./) ?? main,
+			};
 		} finally {
 			tokenSource.dispose();
 		}
