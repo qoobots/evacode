@@ -8,7 +8,7 @@
 	"engines": {
 		"vscode": "*"
 	},
-	"main": "./out/extension.js",
+	"main": "./dist/extension.js",
 	"enabledApiProposals": [
 		"languageModelThinkingPart",
 		"chatProvider"
