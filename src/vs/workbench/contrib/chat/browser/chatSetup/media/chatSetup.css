@@ -68,3 +68,13 @@
 .chat-setup-dialog .dialog-buttons-row > .dialog-buttons > .monaco-button.continue-button.microsoft::before {
 	background-image: url('./microsoft-dark.svg');
 }
+
+/* Dialog icon: the codicon class only supplies the box the icon font would have used, the
+ * product mark itself is an image (see the onboarding sign-in step, which shows the same one). */
+
+.chat-setup-dialog .dialog-message-row > .dialog-icon.codicon-eva-logo {
+	background-image: url('../../../../../browser/media/eva-logo.png');
+	background-repeat: no-repeat;
+	background-position: center;
+	background-size: contain;
+}

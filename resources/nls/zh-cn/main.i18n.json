@@ -4764,7 +4764,7 @@
 			"chatGPTSubscription": "ChatGPT subscription",
 			"chatGPTUsageLimitUsed": "Usage limit",
 			"chatGPTWeeklyLimitUsed": "Weekly limit",
-			"copilotAccountSectionLabel": "Copilot account",
+			"copilotAccountSectionLabel": "Evacode 账户",
 			"copilotCreditsReset": "Resets {0}",
 			"copilotCreditsResetAt": "Resets {0} at {1}",
 			"copilotCreditsUsedLabel": "Credits used",
@@ -4780,7 +4780,7 @@
 			"openCopilotAgentCustomizations": "Agent Customizations for Copilot",
 			"sessionsAccountStatusSectionLabel": "Account status",
 			"settings": "Settings",
-			"signIn": "Sign in to use GitHub Copilot",
+			"signIn": "使用 Evacode 登录",
 			"signOut": "Sign Out",
 			"signOutOfChatGPT": "Sign Out"
 		},
@@ -11039,8 +11039,8 @@
 			"contextInstructions": "当与“{0}”匹配的文件在上下文中时，将自动包含此指令。"
 		},
 		"vs/workbench/contrib/chat/browser/agentSessions/agentHost/agentHostAuth": {
-			"agentHost.signInDialogTitle": "Sign in to use GitHub Copilot",
-			"agentHost.signInFailed": "Failed to sign in to use GitHub Copilot."
+			"agentHost.signInDialogTitle": "登录以使用 Evacode",
+			"agentHost.signInFailed": "登录以使用 Evacode 失败。"
 		},
 		"vs/workbench/contrib/chat/browser/agentSessions/agentHost/agentHostChatContribution": {
 			"agentHostModelSource.chatGPT.description": "Models provided by your ChatGPT subscription",
@@ -11167,7 +11167,7 @@
 		},
 		"vs/workbench/contrib/chat/browser/agentSessions/agentHost/agentHostSignedOutModelsNotification": {
 			"agentHost.signedOutModels.addModels": "Add Models",
-			"agentHost.signedOutModels.description": "Sign in to use GitHub Copilot models, or add a model with your own API key.",
+			"agentHost.signedOutModels.description": "登录以使用 Evacode 模型，或添加使用你自己的 API 密钥的模型。",
 			"agentHost.signedOutModels.message": "Choose how you want to use Copilot.",
 			"agentHost.signedOutModels.signIn": "Sign In"
 		},
@@ -13675,7 +13675,7 @@
 			"chat.category": "聊天",
 			"explain": "说明",
 			"fix": "修复",
-			"forceSignIn": "登录以使用 GitHub Copilot",
+			"forceSignIn": "登录以使用 Evacode",
 			"hideChatSetup": "了解如何隐藏 AI 功能",
 			"manageAdditionalSpend": "管理 GitHub Copilot 预算",
 			"managePlan": "升级到 GitHub Copilot Pro",
@@ -13688,7 +13688,7 @@
 			"toggle.chatSignIn": "Copilot 登录",
 			"toggle.chatSignInDescription": "切换标题栏中 Copilot 登录按钮的可见性",
 			"triggerChatSetup": "免费借助 Copilot 使用 AI 功能...",
-			"triggerChatSetupFromAccounts": "登录以使用 GitHub Copilot...",
+			"triggerChatSetupFromAccounts": "登录以使用 Evacode...",
 			"upgradeSuccess": "升级成功",
 			"upgradeSuccessDescription": "请最多等待 10 分钟，以便应用新计划。"
 		},
@@ -13740,11 +13740,12 @@
 			"continueWith": "使用 {0} 继续",
 			"continueWithoutSigningIn": "Continue Without Signing In",
 			"enableMore": "启用更多 AI 功能",
-			"settings": "继续操作即表示你同意 {0} 的[条款]({1})和[隐私声明]({2})。{3} Copilot 可能会显示[公共代码]({4})建议并使用你的数据来改进产品。你可以随时更改这些[设置]({5})。",
+			"settings": "继续操作即表示你同意 {0} 的[条款]({1})和[隐私声明]({2})。{3} 可能会显示[公共代码]({4})建议并使用你的数据来改进产品。你可以随时更改这些[设置]({5})。",
 			"settingsAnonymous": "继续操作即表示你同意 {0} 的[条款]({1})和[隐私声明]({2})。",
 			"setupAIButton": "使用 AI 功能",
 			"signIn": "登录以使用 Evacode",
-			"startUsing": "开始使用 AI 功能"
+			"startUsing": "开始使用 AI 功能",
+			"settingsWithoutLink": "继续操作即表示你同意 {0} 的[条款]({1})和[隐私声明]({2})。{3} 可能会显示[公共代码]({4})建议并使用你的数据来改进产品。你可以随时更改这些设置。"
 		},
 		"vs/workbench/contrib/chat/browser/chatSlashCommands": {
 			"agents": "配置自定义智能体",
@@ -13830,8 +13831,8 @@
 			"settings.nextEditSuggestions": "下一个编辑建议",
 			"settings.overridden": "(已替代)",
 			"settings.snooze": "推迟",
-			"signInDescription": "登录以使用 GitHub Copilot AI 功能。",
-			"signInToUseAIFeatures": "登录以使用 GitHub Copilot",
+			"signInDescription": "登录以使用 Evacode AI 功能。",
+			"signInToUseAIFeatures": "登录以使用 Evacode",
 			"upgrade": "升级"
 		},
 		"vs/workbench/contrib/chat/browser/chatStatus/chatStatusEntry": {
@@ -15365,7 +15366,7 @@
 		"vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerActionItem": {
 			"chat.modelPicker.modelsLabel": "Models",
 			"chat.modelPicker.restrictedHover": "{0} • Unavailable while in Restricted mode. Trust Workspace to enable models.",
-			"chat.modelPicker.setupRequiredHover": "{0} • Sign in to GitHub Copilot to choose a model."
+			"chat.modelPicker.setupRequiredHover": "{0} • 登录到 Evacode 以选择模型。"
 		},
 		"vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerConfiguration": {
 			"chat.config.cacheBreakHint": "Changing these options mid-session resets the prompt cache and may increase cost.",
@@ -15422,9 +15423,9 @@
 			"chat.modelPicker.restrictedMode": "Models unavailable while in Restricted mode",
 			"chat.modelPicker.restrictedMode.trust": "Trust Workspace to enable models...",
 			"chat.modelPicker.restrictedMode.trustTooltip": "Trust the workspace to enable models.",
-			"chat.modelPicker.setupRequired": "Sign in to use Copilot",
-			"chat.modelPicker.setupRequired.signIn": "Sign in to use Copilot...",
-			"chat.modelPicker.setupRequired.signInTooltip": "Sign in to GitHub Copilot to choose a model.",
+			"chat.modelPicker.setupRequired": "登录以使用 Evacode",
+			"chat.modelPicker.setupRequired.signIn": "登录以使用 Evacode...",
+			"chat.modelPicker.setupRequired.signInTooltip": "登录到 Evacode 以选择模型。",
 			"chat.modelPicker.upgradeHover": "[Upgrade to GitHub Copilot Pro](command:workbench.action.chat.upgradePlan \" \") to use the best models.",
 			"chat.modelPicker.upgradeLink": "[Upgrade](command:workbench.action.chat.upgradePlan \" \")"
 		},
@@ -26623,7 +26624,7 @@
 			"quickOpen": "快速打开一个文件",
 			"runProject": "运行项目",
 			"runTasks": "运行自动检测到的任务",
-			"settings": "{0} Copilot 可能会显示 [公共代码]({1})建议并使用你的数据来改进产品。你可以随时更改这些 [设置]({2})。",
+			"settings": "{0} 可能会显示 [公共代码]({1})建议并使用你的数据来改进产品。你可以随时更改这些 [设置]({2})。",
 			"setupCopilotButton.chatWithCopilot": "开始聊天",
 			"setupCopilotButton.setup": "使用 AI 功能",
 			"showOrFocusHover": "显示或聚焦悬停",
@@ -26683,15 +26684,13 @@
 			"onboarding.personalize.tip.prefix": "提示: 按 ",
 			"onboarding.personalize.tip.shift": "Shift",
 			"onboarding.personalize.tip.suffix": " 以访问所有 VS Code 命令。",
-			"onboarding.sessions.signInNudge": "登录以使用 GitHub Copilot",
+			"onboarding.sessions.signInNudge": "登录以使用 Evacode",
 			"onboarding.signIn.apple": "使用 Apple 继续",
-			"onboarding.signIn.disclaimer.copilotPrefix": "。{0} Copilot 可能会显示 ",
 			"onboarding.signIn.disclaimer.improveSuffix": " 建议并使用你的数据改进产品。",
 			"onboarding.signIn.disclaimer.middle": " 和 ",
 			"onboarding.signIn.disclaimer.prefix": "登录即表示你同意 {0} 的 ",
 			"onboarding.signIn.disclaimer.privacy": "隐私声明",
 			"onboarding.signIn.disclaimer.publicCode": "公共代码",
-			"onboarding.signIn.disclaimer.settings": "设置",
 			"onboarding.signIn.disclaimer.settingsPrefix": "你可以更改这些 ",
 			"onboarding.signIn.disclaimer.suffix": " 随时。",
 			"onboarding.signIn.disclaimer.terms": "条款",
@@ -26708,12 +26707,13 @@
 			"onboarding.signIn.github": "继续使用 GitHub",
 			"onboarding.signIn.github.aria": "继续使用 GitHub",
 			"onboarding.signIn.google": "使用 Google 继续",
-			"onboarding.signIn.heroSubtitle": "登录以使用 GitHub Copilot。",
+			"onboarding.signIn.heroSubtitle": "登录以使用 Evacode。",
 			"onboarding.signIn.heroTitle": "欢迎使用 VS Code",
 			"onboarding.signIn.signedIn": "你已登录。可以继续执行下一步。",
 			"onboarding.step.aria": "第 {0} 步(共 {1} 步): {2}",
 			"onboarding.stepOf": "{0}/{1}",
-			"onboarding.theme.selected.alert": "已选择 {0} 主题"
+			"onboarding.theme.selected.alert": "已选择 {0} 主题",
+			"onboarding.signIn.disclaimer.publicCodePrefix": "。{0} 可能会显示 "
 		},
 		"vs/workbench/contrib/welcomeOnboarding/browser/welcomeOnboarding.contribution": {
 			"welcomeOnboarding2026": "2026 欢迎载入"

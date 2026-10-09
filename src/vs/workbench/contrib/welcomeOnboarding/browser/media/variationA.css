@@ -461,12 +461,7 @@
 
 
 .onboarding-a-provider-mark.eva {
-	background-image: none;
-}
-
-.onboarding-a-provider-mark.eva .codicon {
-	font-size: 18px;
-	color: currentColor;
+	background-image: url('../../../../browser/media/eva-logo.png');
 }
 
 

@@ -25,7 +25,7 @@ suite('OnboardingVariationA', () => {
 	const store = ensureNoDisposablesAreLeakedInTestSuite();
 	teardown(() => sinon.restore());
 
-	function createOnboarding(configuration = new TestConfigurationService(), settingsUrl?: string) {
+	function createOnboarding(configuration = new TestConfigurationService()) {
 		const container = mainWindow.document.body.appendChild($('div'));
 		store.add(toDisposable(() => container.remove()));
 		store.add(configuration.onDidChangeConfigurationEmitter);
@@ -34,7 +34,7 @@ suite('OnboardingVariationA', () => {
 		instantiationService.stub(IWorkbenchThemeService, { getColorTheme: () => ColorThemeData.createLoadedEmptyTheme('test', '') });
 		instantiationService.stub(IExtensionGalleryService, {});
 		instantiationService.stub(IExtensionManagementService, {});
-		instantiationService.stub(IDefaultAccountService, { resolveGitHubUrl: () => settingsUrl });
+		instantiationService.stub(IDefaultAccountService, { resolveGitHubUrl: () => undefined });
 		instantiationService.stub(IConfigurationService, configuration);
 		const commandInvoked = new DeferredPromise<void>();
 		const executeCommand = sinon.stub().callsFake(async () => {
@@ -47,25 +47,20 @@ suite('OnboardingVariationA', () => {
 		return { container, executeCommand, commandInvoked: commandInvoked.p };
 	}
 
-	for (const settingsUrl of [undefined, 'https://tenant.ghe.com/settings/copilot/features']) {
-		test(`settings disclaimer ${settingsUrl ? 'links to the selected server' : 'has no link or focus stop when the URL is unavailable'}`, () => {
-			const { container } = createOnboarding(undefined, settingsUrl);
+	test('disclaimer ends with the public code sentence and offers no settings link', () => {
+		const { container } = createOnboarding();
 
-			const disclaimer = container.querySelector('.onboarding-a-signin-disclaimer');
-			assert.ok(disclaimer);
-			const settingsLinks = Array.from(disclaimer.querySelectorAll('a, [tabindex]'))
-				.filter(element => element.textContent === 'settings');
-			assert.deepStrictEqual({
-				coherentText: disclaimer.textContent?.endsWith('You can change these settings anytime.'),
-				settingsLinks: settingsLinks.map(link => ({
-					tag: link.tagName,
-					href: link.getAttribute('href'),
-				})),
-			}, {
-				coherentText: true,
-				settingsLinks: settingsUrl ? [{ tag: 'A', href: settingsUrl }] : [],
-			});
+		const disclaimer = container.querySelector('.onboarding-a-signin-disclaimer');
+		assert.ok(disclaimer);
+		const settingsLinks = Array.from(disclaimer.querySelectorAll('a, [tabindex]'))
+			.filter(element => element.textContent === 'settings');
+		assert.deepStrictEqual({
+			coherentText: disclaimer.textContent?.endsWith('suggestions and use your data to improve the product.'),
+			settingsLinks: settingsLinks.length,
+		}, {
+			coherentText: true,
+			settingsLinks: 0,
 		});
-	}
+	});
 
 });
