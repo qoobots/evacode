@@ -10,6 +10,7 @@ import { readConfig, type EvaConfig } from './evaConfig';
 import { streamChat, type EvaUsage } from './evaChat';
 import { AUTO_MODEL_ID, describeModel, fetchModels, limitsFor, orderModels, type EvaModelCatalog } from './evaModels';
 import { EvaLocalProxy } from './evaProxy';
+import { applyCliConfig, cliTargets, restoreCliConfig } from './evaCliConfig';
 
 /**
  * Must match `contributes.languageModelChatProviders[].vendor` in package.json, otherwise the
@@ -83,6 +84,53 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 	context.subscriptions.push(vscode.commands.registerCommand('eva-ai.stopProxy', async () => {
 		await proxy.stop();
 		vscode.window.showInformationMessage('EVA 本地代理已停止。');
+	}));
+
+	/** Picks the concrete model external CLIs should be pointed at. */
+	async function resolveCliModel(): Promise<string | undefined> {
+		const configured = readConfig().defaultModel;
+		if (configured) {
+			return configured;
+		}
+		const tokenSource = new vscode.CancellationTokenSource();
+		try {
+			const infos = await provider.provideLanguageModelChatInformation({ silent: true }, tokenSource.token);
+			// Auto heads the list; the entry after it is the gateway's own preferred model.
+			return infos[1]?.id ?? infos[0]?.id;
+		} finally {
+			tokenSource.dispose();
+		}
+	}
+
+	const applyTarget = async (id: 'claudeCode' | 'codex'): Promise<void> => {
+		const target = cliTargets().find(candidate => candidate.id === id);
+		if (!target) {
+			return;
+		}
+		try {
+			const info = await proxy.start();
+			const model = await resolveCliModel();
+			if (!model) {
+				vscode.window.showErrorMessage('没有可用模型：请先运行「Eva AI: 登录」。');
+				return;
+			}
+			await applyCliConfig(target, info, model);
+			vscode.window.showInformationMessage(`已把 ${target.file} 指向 EVA（模型 ${model}）。原文件已备份为 ${target.file}.eva-backup`);
+		} catch (err) {
+			vscode.window.showErrorMessage(`写入 ${target.file} 失败：${errorMessage(err)}`);
+		}
+	};
+
+	context.subscriptions.push(vscode.commands.registerCommand('eva-ai.applyToClaudeCode', () => applyTarget('claudeCode')));
+	context.subscriptions.push(vscode.commands.registerCommand('eva-ai.applyToCodex', () => applyTarget('codex')));
+	context.subscriptions.push(vscode.commands.registerCommand('eva-ai.restoreCliConfig', async () => {
+		let restored = 0;
+		for (const target of cliTargets()) {
+			if (await restoreCliConfig(target)) {
+				restored++;
+			}
+		}
+		vscode.window.showInformationMessage(restored ? `已还原 ${restored} 个 CLI 配置文件。` : '没有找到备份，无需还原。');
 	}));
 
 	context.subscriptions.push(vscode.commands.registerCommand('eva-ai.login', async () => {

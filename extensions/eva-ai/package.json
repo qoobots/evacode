@@ -40,6 +40,18 @@
 			{
 				"command": "eva-ai.stopProxy",
 				"title": "Eva AI: 停止本地代理"
+			},
+			{
+				"command": "eva-ai.applyToClaudeCode",
+				"title": "Eva AI: 应用到 Claude Code"
+			},
+			{
+				"command": "eva-ai.applyToCodex",
+				"title": "Eva AI: 应用到 Codex"
+			},
+			{
+				"command": "eva-ai.restoreCliConfig",
+				"title": "Eva AI: 还原 CLI 配置"
 			}
 		],
 		"languageModelChatProviders": [
