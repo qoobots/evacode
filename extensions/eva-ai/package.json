@@ -3,15 +3,26 @@
 	"displayName": "Eva AI",
 	"description": "Use Eva AI large language models in chat, as an alternative to Copilot.",
 	"version": "0.0.1",
+	"publisher": "vscode",
 	"license": "MIT",
 	"engines": {
 		"vscode": "*"
 	},
 	"main": "./out/extension.js",
+	"enabledApiProposals": [
+		"languageModelThinkingPart"
+	],
 	"activationEvents": [
-		"onStartupFinished"
+		"onStartupFinished",
+		"onAuthenticationRequest:eva"
 	],
 	"contributes": {
+		"authentication": [
+			{
+				"label": "EVA",
+				"id": "eva"
+			}
+		],
 		"commands": [
 			{
 				"command": "eva-ai.login",
@@ -57,7 +68,7 @@
 				"eva-ai.defaultModel": {
 					"type": "string",
 					"default": "",
-					"description": "优先模型。留空表示使用网关返回的默认模型。"
+					"description": "指定固定模型时填写模型 id。留空即为「自动（Auto）」，使用平台当前默认的模型，不必在此写死某个模型。"
 				},
 				"eva-ai.temperature": {
 					"type": "number",
@@ -67,12 +78,12 @@
 				"eva-ai.maxInputTokens": {
 					"type": "number",
 					"default": 128000,
-					"description": "模型可接受的最大输入 token 数。网关不回传该值，只能估算。"
+					"description": "仅用于「未实测」模型的输入上限兜底。已知模型一律使用从 EVA 实测到的真实值（见 evaModels.ts 的 MEASURED_LIMITS），此设置对其无效。"
 				},
 				"eva-ai.maxOutputTokens": {
 					"type": "number",
 					"default": 8192,
-					"description": "模型可生成的最大输出 token 数。网关不回传该值，只能估算。"
+					"description": "仅用于「未实测」模型或服务端不校验输出上限的模型的兜底值。已知模型一律使用从 EVA 实测到的真实值。"
 				}
 			}
 		}

@@ -31,9 +31,18 @@ export interface EvaToolCall {
 	readonly arguments: string;
 }
 
+/** Real token counts, as reported by the gateway (only when `stream_options.include_usage` is set). */
+export interface EvaUsage {
+	readonly prompt_tokens?: number;
+	readonly completion_tokens?: number;
+	readonly total_tokens?: number;
+}
+
 export interface EvaStreamHandlers {
 	onText(text: string): void;
+	onThinking(text: string): void;
 	onToolCall(calls: readonly EvaToolCall[]): void;
+	onUsage?(usage: EvaUsage): void;
 }
 
 export interface EvaChatRequest {
@@ -89,6 +98,9 @@ async function runOnce(request: EvaChatRequest, temperature: number | undefined)
 		messages: toWireMessages(request.messages),
 		stream: true,
 		max_tokens: request.maxOutputTokens,
+		// Without this the gateway omits `usage` from every frame; with it we get real token counts
+		// instead of having to estimate them.
+		stream_options: { include_usage: true },
 	};
 	if (typeof temperature === 'number') {
 		body.temperature = temperature;
@@ -164,6 +176,10 @@ async function readStream(response: Response, handlers: EvaStreamHandlers, hadTe
 					throw new Error(`EVA AI 上游错误：${errorText}`);
 				}
 
+				if (frame?.usage) {
+					handlers.onUsage?.(frame.usage);
+				}
+
 				const choice = frame?.choices?.[0];
 				if (!choice) {
 					continue;
@@ -172,6 +188,14 @@ async function readStream(response: Response, handlers: EvaStreamHandlers, hadTe
 
 				if (typeof delta.content === 'string' && delta.content) {
 					handlers.onText(delta.content);
+				}
+
+				// Reasoning is not standardised across OpenAI-compatible gateways: DashScope/Qwen
+				// send `reasoning_content`, others use `reasoning` or `reasoning_text`. Accept all of
+				// them, otherwise the model's reasoning silently lands in the answer text.
+				const thinking = delta.reasoning_content ?? delta.reasoning ?? delta.reasoning_text;
+				if (typeof thinking === 'string' && thinking) {
+					handlers.onThinking(thinking);
 				}
 
 				if (Array.isArray(delta.tool_calls)) {

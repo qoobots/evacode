@@ -5,9 +5,10 @@
 
 import * as vscode from 'vscode';
 import { EvaAuthService } from './evaAuth';
+import { EvaAuthenticationProvider } from './evaAuthProvider';
 import { readConfig, type EvaConfig } from './evaConfig';
-import { streamChat } from './evaChat';
-import { describeModel, fetchModels, orderModels, type EvaModelCatalog } from './evaModels';
+import { streamChat, type EvaUsage } from './evaChat';
+import { AUTO_MODEL_ID, describeModel, fetchModels, limitsFor, orderModels, type EvaModelCatalog } from './evaModels';
 
 /**
  * Must match `contributes.languageModelChatProviders[].vendor` in package.json, otherwise the
@@ -15,12 +16,38 @@ import { describeModel, fetchModels, orderModels, type EvaModelCatalog } from '.
  */
 const VENDOR = 'eva-ai';
 
+/** Must match `contributes.authentication[].id` in package.json. */
+const AUTH_PROVIDER_ID = 'eva';
+
 /** Bumped whenever the model list would change for reasons visible to the user. */
 const MODEL_VERSION = '1.0';
+
+/**
+ * Seed for the chars-per-token estimate, used only until the first real `prompt_tokens` arrives.
+ *
+ * 2 is deliberately conservative: Latin text is nearer 4, but a Chinese character is usually a
+ * token, and over-counting merely truncates early while under-counting overflows the context.
+ */
+const INITIAL_CHARS_PER_TOKEN = 2;
+
+/**
+ * The response parts this provider can emit.
+ *
+ * Stable `LanguageModelResponsePart` does not include thinking; only the `chatProvider` proposal's
+ * `LanguageModelResponsePart2` does, and pulling that in drags most of the chat proposals along
+ * (`ChatLocation`, `ChatToolInvocationPart`, …). The extension host accepts thinking parts from
+ * providers unconditionally and exposes the class on the `vscode` API unconditionally, so this
+ * union is the accurate type without the dependency chain.
+ */
+type EvaResponsePart = vscode.LanguageModelResponsePart | vscode.LanguageModelThinkingPart;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
 	const auth = new EvaAuthService(context.secrets, readConfig);
 	await auth.load();
+
+	const authProvider = new EvaAuthenticationProvider(auth);
+	context.subscriptions.push(authProvider);
+	context.subscriptions.push(vscode.authentication.registerAuthenticationProvider(AUTH_PROVIDER_ID, 'EVA', authProvider, { supportsMultipleAccounts: false }));
 
 	const provider = new EvaLanguageModelChatProvider(auth, readConfig);
 	context.subscriptions.push(provider);
@@ -61,6 +88,12 @@ class EvaLanguageModelChatProvider implements vscode.LanguageModelChatProvider, 
 	/** Short-lived /models cache: the gateway has no token limits to vary, so this is cheap. */
 	private cachedModels: readonly vscode.LanguageModelChatInformation[] | undefined;
 	private cacheKey: string | undefined;
+	/** The gateway's own default, used to resolve the Auto entry. */
+	private defaultModelId: string | undefined;
+	/** Chars in the last prompt per model, so real `prompt_tokens` can calibrate the estimate. */
+	private readonly promptChars = new Map<string, number>();
+	/** Learned chars-per-token per model; see {@link learnCharsPerToken}. */
+	private readonly charsPerToken = new Map<string, number>();
 
 	private readonly authListener: vscode.Disposable;
 
@@ -141,11 +174,14 @@ class EvaLanguageModelChatProvider implements vscode.LanguageModelChatProvider, 
 			ids = ids.filter(id => allowList.has(id));
 		}
 
+		this.defaultModelId = catalog.defaultId;
+
 		const preferred = config.defaultModel || catalog.defaultId || ids[0] || '';
 		const ordered = orderModels(ids, preferred, undefined);
 
-		const models = ordered.map(id => {
+		const models: vscode.LanguageModelChatInformation[] = ordered.map(id => {
 			const description = describeModel(id);
+			const limits = limitsFor(id, config);
 			return {
 				id,
 				name: description.name,
@@ -153,8 +189,8 @@ class EvaLanguageModelChatProvider implements vscode.LanguageModelChatProvider, 
 				version: MODEL_VERSION,
 				detail: description.detail,
 				tooltip: description.tooltip,
-				maxInputTokens: config.maxInputTokens,
-				maxOutputTokens: config.maxOutputTokens,
+				maxInputTokens: limits.maxInputTokens,
+				maxOutputTokens: limits.maxOutputTokens,
 				capabilities: {
 					// The gateway exposes no owner-supplied model metadata, and the models served here
 					// are text-only - a vision claim would just fail at request time.
@@ -164,16 +200,46 @@ class EvaLanguageModelChatProvider implements vscode.LanguageModelChatProvider, 
 			} satisfies vscode.LanguageModelChatInformation;
 		});
 
+		// Auto goes first so it is the default pick.
+		//
+		// The gateway has no literal "auto": asking for it returns HTTP 200 with `model` echoed back
+		// as its own default, the same silent fallback it applies to any id it does not recognise.
+		// So Auto resolves to that declared default, rather than pretending the platform picks per
+		// request. Its limits are the ones measured for that default model, not a generic guess.
+		const autoLimits = limitsFor(catalog.defaultId ?? AUTO_MODEL_ID, config);
+		models.unshift({
+			id: AUTO_MODEL_ID,
+			name: '自动（Auto）',
+			family: 'auto',
+			version: MODEL_VERSION,
+			detail: '由平台选择最合适的模型',
+			tooltip: catalog.defaultId ? `由平台选择最合适的模型（平台当前默认：${catalog.defaultId}）` : '由平台选择最合适的模型',
+			maxInputTokens: autoLimits.maxInputTokens,
+			maxOutputTokens: autoLimits.maxOutputTokens,
+			capabilities: {
+				imageInput: false,
+				toolCalling: true,
+			},
+		});
+
 		this.cacheKey = key;
 		this.cachedModels = models;
 		return [...models];
+	}
+
+	/** Resolves our Auto placeholder to a concrete id before it reaches the gateway. */
+	private resolveModelId(id: string): string {
+		if (id !== AUTO_MODEL_ID) {
+			return id;
+		}
+		return this.defaultModelId ?? AUTO_MODEL_ID;
 	}
 
 	async provideLanguageModelChatResponse(
 		model: vscode.LanguageModelChatInformation,
 		messages: readonly vscode.LanguageModelChatRequestMessage[],
 		options: vscode.ProvideLanguageModelChatResponseOptions,
-		progress: vscode.Progress<vscode.LanguageModelResponsePart>,
+		progress: vscode.Progress<EvaResponsePart>,
 		token: vscode.CancellationToken,
 	): Promise<void> {
 		const config = this.getConfig();
@@ -184,23 +250,29 @@ class EvaLanguageModelChatProvider implements vscode.LanguageModelChatProvider, 
 
 		const controller = new AbortController();
 		const listener = token.onCancellationRequested(() => controller.abort());
+		const targetId = this.resolveModelId(model.id);
+		this.promptChars.set(targetId, JSON.stringify(messages).length);
 		try {
 			await streamChat({
 				baseUrl: config.aiBaseUrl,
 				token: accessToken,
-				model: model.id,
+				model: targetId,
 				messages,
 				tools: options.tools,
 				temperature: config.temperature,
-				maxOutputTokens: config.maxOutputTokens,
+				// Per model, from the limits measured against eva-ai: asking for more than the service
+				// allows is a hard 400 ("Range of max_tokens should be [1, N]").
+				maxOutputTokens: limitsFor(targetId, config).maxOutputTokens,
 				signal: controller.signal,
 				handlers: {
 					onText: text => progress.report(new vscode.LanguageModelTextPart(text)),
+					onThinking: text => progress.report(new vscode.LanguageModelThinkingPart(text)),
 					onToolCall: calls => {
 						for (const call of calls) {
 							progress.report(new vscode.LanguageModelToolCallPart(call.id, call.name, parseArguments(call.arguments)));
 						}
 					},
+					onUsage: usage => this.learnCharsPerToken(targetId, usage),
 				},
 			});
 		} finally {
@@ -209,13 +281,32 @@ class EvaLanguageModelChatProvider implements vscode.LanguageModelChatProvider, 
 	}
 
 	async provideTokenCount(
-		_model: vscode.LanguageModelChatInformation,
+		model: vscode.LanguageModelChatInformation,
 		text: string | vscode.LanguageModelChatRequestMessage,
 		_token: vscode.CancellationToken,
 	): Promise<number> {
-		// The gateway returns no `usage` at all, so eva-desktop estimates the same way (chars / 4).
 		const value = typeof text === 'string' ? text : JSON.stringify(text);
-		return Math.ceil(value.length / 4);
+		const ratio = this.charsPerToken.get(this.resolveModelId(model.id)) ?? INITIAL_CHARS_PER_TOKEN;
+		return Math.max(1, Math.ceil(value.length / ratio));
+	}
+
+	/**
+	 * Keeps the chars-per-token ratio honest, using the token counts eva-ai actually reports.
+	 *
+	 * A fixed chars/4 is only right for Latin text: in Chinese a character is usually a token, so
+	 * chars/4 under-counts the prompt roughly threefold and makes the context window look far larger
+	 * than it is. `stream_options.include_usage` gives us the real `prompt_tokens` on every response,
+	 * so the estimate corrects itself. Smoothing keeps one short request from pinning the ratio.
+	 */
+	private learnCharsPerToken(modelId: string, usage: EvaUsage): void {
+		const promptTokens = usage.prompt_tokens;
+		const chars = this.promptChars.get(modelId);
+		if (!promptTokens || !chars) {
+			return;
+		}
+		const observed = chars / promptTokens;
+		const previous = this.charsPerToken.get(modelId);
+		this.charsPerToken.set(modelId, previous ? previous * 0.7 + observed * 0.3 : observed);
 	}
 }
 
