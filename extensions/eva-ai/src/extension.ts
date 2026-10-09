@@ -10,7 +10,7 @@ import { readConfig, type EvaConfig } from './evaConfig';
 import { streamChat, type EvaUsage } from './evaChat';
 import { AUTO_MODEL_ID, describeModel, fetchModels, limitsFor, orderModels, type EvaModelCatalog } from './evaModels';
 import { EvaLocalProxy } from './evaProxy';
-import { applyCliConfig, cliTargets, restoreCliConfig } from './evaCliConfig';
+import { applyCliConfig, cliTargets, restoreCliConfig, type CliModelSlots } from './evaCliConfig';
 
 /**
  * Must match `contributes.languageModelChatProviders[].vendor` in package.json, otherwise the
@@ -86,17 +86,28 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 		vscode.window.showInformationMessage('EVA 本地代理已停止。');
 	}));
 
-	/** Picks the concrete model external CLIs should be pointed at. */
-	async function resolveCliModel(): Promise<string | undefined> {
-		const configured = readConfig().defaultModel;
-		if (configured) {
-			return configured;
-		}
+	/**
+	 * Picks one model per Claude Code tier from what the gateway actually offers. The tiers are
+	 * independent env slots the picker renders as separate entries, so they get distinct models
+	 * rather than four copies of the same one.
+	 */
+	async function resolveCliModels(): Promise<CliModelSlots | undefined> {
 		const tokenSource = new vscode.CancellationTokenSource();
 		try {
 			const infos = await provider.provideLanguageModelChatInformation({ silent: true }, tokenSource.token);
 			// Auto heads the list; the entry after it is the gateway's own preferred model.
-			return infos[1]?.id ?? infos[0]?.id;
+			const ids = infos.map(info => info.id).filter(id => id !== AUTO_MODEL_ID);
+			const main = readConfig().defaultModel || ids[0];
+			if (!main) {
+				return undefined;
+			}
+			// The gateway reports ids only, so weight has to be inferred from names; anything that
+			// does not match falls back to the main model instead of to something unvetted.
+			const opus = ids.find(id => /max/i.test(id)) ?? main;
+			const haiku = ids.find(id => /turbo|flash/i.test(id)) ?? main;
+			const taken = new Set([main, opus, haiku]);
+			const fable = ids.find(id => !taken.has(id)) ?? main;
+			return { main, opus, haiku, fable };
 		} finally {
 			tokenSource.dispose();
 		}
@@ -109,13 +120,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 		}
 		try {
 			const info = await proxy.start();
-			const model = await resolveCliModel();
-			if (!model) {
+			const models = await resolveCliModels();
+			if (!models) {
 				vscode.window.showErrorMessage('没有可用模型：请先运行「Eva AI: 登录」。');
 				return;
 			}
-			await applyCliConfig(target, info, model);
-			vscode.window.showInformationMessage(`已把 ${target.file} 指向 EVA（模型 ${model}）。原文件已备份为 ${target.file}.eva-backup`);
+			await applyCliConfig(target, info, models);
+			vscode.window.showInformationMessage(`已把 ${target.file} 指向 EVA（${models.main}，Opus ${models.opus}，Haiku ${models.haiku}）。原文件已备份为 ${target.file}.eva-backup`);
 		} catch (err) {
 			vscode.window.showErrorMessage(`写入 ${target.file} 失败：${errorMessage(err)}`);
 		}

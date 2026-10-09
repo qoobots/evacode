@@ -36,14 +36,25 @@ export function cliTargets(): readonly EvaCliTarget[] {
  * The previous contents are copied to `<file>.eva-backup` first, and only one generation of backup
  * is kept — applying twice in a row is safe because each run backs up what is there now.
  */
-export async function applyCliConfig(target: EvaCliTarget, proxy: EvaProxyInfo, model: string): Promise<void> {
+export interface CliModelSlots {
+	/** Primary model: runs the main loop and is what the picker shows as Sonnet. */
+	readonly main: string;
+	/** Heavier tier, offered so switching up stays inside EVA. */
+	readonly opus: string;
+	/** Background tier (titles, summaries) — deliberately the cheapest the gateway offers. */
+	readonly haiku: string;
+	/** Spare tier; Claude Code renders one entry per tier, so it needs a value of its own. */
+	readonly fable: string;
+}
+
+export async function applyCliConfig(target: EvaCliTarget, proxy: EvaProxyInfo, models: CliModelSlots): Promise<void> {
 	await backup(target.file);
 	switch (target.id) {
 		case 'claudeCode':
-			await applyToClaudeCode(target.file, proxy, model);
+			await applyToClaudeCode(target.file, proxy, models);
 			return;
 		case 'codex':
-			await applyToCodex(target.file, proxy, model);
+			await applyToCodex(target.file, proxy, models.main);
 			return;
 	}
 }
@@ -65,29 +76,32 @@ export async function restoreCliConfig(target: EvaCliTarget): Promise<boolean> {
 
 // #region Claude Code — ~/.claude/settings.json
 
-async function applyToClaudeCode(file: string, proxy: EvaProxyInfo, model: string): Promise<void> {
+async function applyToClaudeCode(file: string, proxy: EvaProxyInfo, models: CliModelSlots): Promise<void> {
 	const settings = await readJsonFile(file);
 
 	// Claude Code reads its endpoint and its model tiers from the environment. Leaving any tier
 	// pointing at a foreign model would send part of the session — subagents, background
-	// summarisation — back out to another vendor, so all of them are rewritten together.
+	// summarisation — back out to another vendor, so all of them are rewritten together. Each tier
+	// gets its own model: they are independent slots the picker renders as separate entries, so
+	// filling them all with one id offers four identical choices and makes the haiku tier — which
+	// runs the background work — as expensive as the main loop.
 	const env = (isRecord(settings.env) ? { ...settings.env } : {}) as Record<string, unknown>;
 	env.ANTHROPIC_BASE_URL = proxy.baseUrl;
 	env.ANTHROPIC_AUTH_TOKEN = proxy.key;
-	env.ANTHROPIC_MODEL = model;
-	env.ANTHROPIC_DEFAULT_SONNET_MODEL = model;
-	env.ANTHROPIC_DEFAULT_OPUS_MODEL = model;
-	env.ANTHROPIC_DEFAULT_HAIKU_MODEL = model;
-	env.ANTHROPIC_DEFAULT_FABLE_MODEL = model;
+	env.ANTHROPIC_MODEL = models.main;
+	env.ANTHROPIC_DEFAULT_SONNET_MODEL = models.main;
+	env.ANTHROPIC_DEFAULT_OPUS_MODEL = models.opus;
+	env.ANTHROPIC_DEFAULT_HAIKU_MODEL = models.haiku;
+	env.ANTHROPIC_DEFAULT_FABLE_MODEL = models.fable;
 	// The *_NAME siblings are what Claude Code shows in its own model UI; leaving them pointing at
 	// the previous vendor would display a model the session never actually calls.
-	env.ANTHROPIC_DEFAULT_SONNET_MODEL_NAME = model;
-	env.ANTHROPIC_DEFAULT_OPUS_MODEL_NAME = model;
-	env.ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME = model;
-	env.ANTHROPIC_DEFAULT_FABLE_MODEL_NAME = model;
-	env.CLAUDE_CODE_SUBAGENT_MODEL = model;
+	env.ANTHROPIC_DEFAULT_SONNET_MODEL_NAME = models.main;
+	env.ANTHROPIC_DEFAULT_OPUS_MODEL_NAME = models.opus;
+	env.ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME = models.haiku;
+	env.ANTHROPIC_DEFAULT_FABLE_MODEL_NAME = models.fable;
+	env.CLAUDE_CODE_SUBAGENT_MODEL = models.main;
 	settings.env = env;
-	settings.model = model;
+	settings.model = models.main;
 
 	await fs.writeFile(file, `${JSON.stringify(settings, null, 2)}\n`, 'utf8');
 }
