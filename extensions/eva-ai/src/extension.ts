@@ -115,6 +115,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 	interface ModelDetail {
 		readonly code: string;
 		readonly provider: string;
+		readonly type: string;
 		readonly capabilities: readonly string[];
 		readonly contextWindow: number;
 	}
@@ -139,6 +140,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 			return (raw.data?.content ?? []).map(row => ({
 				code: String(row.modelCode ?? ''),
 				provider: String(row.providerCode ?? ''),
+				type: String(row.modelType ?? ''),
 				capabilities: Array.isArray(row.capabilities) ? row.capabilities.map(String) : [],
 				contextWindow: typeof row.contextWindow === 'number' ? row.contextWindow : 0,
 			}));
@@ -183,16 +185,27 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 			if (!bestOf.size) {
 				return { main: anchor, opus: anchor, haiku: anchor, fable: anchor };
 			}
+			const types = new Map(details.map(detail => [detail.code, detail.type]));
 
 			// Stay on the vendor the gateway itself recommends, but on that vendor's current release.
 			const anchorVendor = details.find(detail => detail.code === anchor)?.provider ?? brandOf(anchor);
 			const main = bestOf.get(anchorVendor) ?? anchor;
 			const others = [...bestOf.keys()].filter(vendor => vendor !== anchorVendor);
+
+			// Opus is the tier the session actually runs on, so it takes the strongest plain-text
+			// entry rather than the strongest overall: kimi-k3 outranks every rival on capability
+			// yet rejects `temperature`, which Claude Code sends, and a tier that answers 400 on
+			// arrival is worse than one with fewer tags. It lands on the spare tier, where failing
+			// costs nothing — Haiku keeps the weakest, since it only does titles and summaries.
+			const opusVendor = others.find(vendor => types.get(bestOf.get(vendor) ?? '') === 'llm') ?? others[0];
+			const rest = others.filter(vendor => vendor !== opusVendor);
+			const haikuVendor = rest[rest.length - 1];
+			const fableVendor = rest.find(vendor => vendor !== haikuVendor) ?? rest[0];
 			return {
 				main,
-				opus: bestOf.get(others[0]) ?? main,
-				fable: bestOf.get(others[1]) ?? main,
-				haiku: bestOf.get(others[others.length - 1]) ?? main,
+				opus: bestOf.get(opusVendor) ?? main,
+				haiku: bestOf.get(haikuVendor) ?? main,
+				fable: bestOf.get(fableVendor) ?? main,
 			};
 		} finally {
 			tokenSource.dispose();
