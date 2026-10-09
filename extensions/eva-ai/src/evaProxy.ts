@@ -629,14 +629,16 @@ function requestToMessagesError(raw: Record<string, unknown>): Record<string, un
 // #region HTTP helpers
 
 function isAuthorized(req: http.IncomingMessage, key: string): boolean {
-	const header = req.headers.authorization;
-	if (typeof header !== 'string') {
-		return false;
-	}
-	// Anthropic's SDKs send `x-api-key`, OpenAIs send `Authorization`. Accept both.
-	const bearer = header.startsWith('Bearer ') ? header.slice(7) : header;
-	const alt = req.headers['x-api-key'];
-	const candidate = bearer || (Array.isArray(alt) ? alt[0] : alt) || '';
+	// Anthropic's SDKs authenticate with `x-api-key` and send no `Authorization` at all, while
+	// OpenAI's SDKs do the reverse — so either one alone has to be enough.
+	const authorization = req.headers.authorization;
+	const bearer = typeof authorization === 'string' && authorization.startsWith('Bearer ')
+		? authorization.slice(7)
+		: authorization;
+	const apiKey = req.headers['x-api-key'];
+	const candidate = (typeof bearer === 'string' ? bearer : '')
+		|| (Array.isArray(apiKey) ? apiKey[0] : apiKey)
+		|| '';
 	return candidate === key;
 }
 
