@@ -10,6 +10,15 @@ import * as vscode from 'vscode';
 import type { EvaAuthService } from './evaAuth';
 import { readConfig } from './evaConfig';
 
+/**
+ * Fixed by default rather than ephemeral: the CLI configurations we write carry this address and
+ * are read back long after the window that wrote them closed, so an ephemeral port would strand
+ * them on a dead endpoint at the next restart. Falling back to an ephemeral port beats failing
+ * outright when the default is already taken.
+ */
+const DEFAULT_PROXY_PORT = 45877;
+const PROXY_KEY_STORAGE_KEY = 'eva-ai.proxyKey';
+
 export interface EvaProxyInfo {
 	/** Loopback endpoint for external CLIs, e.g. `http://127.0.0.1:54321` — no trailing slash. */
 	readonly baseUrl: string;
@@ -34,9 +43,22 @@ export class EvaLocalProxy implements vscode.Disposable {
 	private _server: http.Server | undefined;
 	private _starting: Promise<EvaProxyInfo> | undefined;
 	private _info: EvaProxyInfo | undefined;
-	private readonly _key = randomBytes(24).toString('hex');
 
-	constructor(private readonly _auth: EvaAuthService) { }
+	/**
+	 * Persisted across restarts. CLI configurations are written once and read back much later, so
+	 * a key that changed on every launch would lock the CLI out with a 401 after any restart.
+	 */
+	private readonly _key: string;
+
+	constructor(private readonly _auth: EvaAuthService, storage?: vscode.Memento) {
+		const existing = storage?.get<string>(PROXY_KEY_STORAGE_KEY);
+		if (existing) {
+			this._key = existing;
+			return;
+		}
+		this._key = randomBytes(24).toString('hex');
+		void storage?.update(PROXY_KEY_STORAGE_KEY, this._key);
+	}
 
 	/** Endpoint details, once {@link start} has resolved. */
 	get info(): EvaProxyInfo | undefined {
@@ -57,15 +79,23 @@ export class EvaLocalProxy implements vscode.Disposable {
 				writeJson(res, 500, { type: 'error', error: { type: 'api_error', message: errorMessage(err) } });
 			});
 		});
-		await new Promise<void>((resolve, reject) => {
-			server.once('error', reject);
-			server.listen(0, '127.0.0.1', resolve);
-		});
+		await this._listen(server);
 		this._server = server;
 		const address = server.address();
 		const port = (address && typeof address === 'object') ? address.port : 0;
 		this._info = { baseUrl: `http://127.0.0.1:${port}`, key: this._key };
 		return this._info;
+	}
+
+	private async _listen(server: http.Server): Promise<void> {
+		try {
+			await bind(server, DEFAULT_PROXY_PORT);
+		} catch (err) {
+			if ((err as NodeJS.ErrnoException)?.code !== 'EADDRINUSE') {
+				throw err;
+			}
+			await bind(server, 0);
+		}
 	}
 
 	async stop(): Promise<void> {
@@ -608,6 +638,20 @@ function isAuthorized(req: http.IncomingMessage, key: string): boolean {
 	const alt = req.headers['x-api-key'];
 	const candidate = bearer || (Array.isArray(alt) ? alt[0] : alt) || '';
 	return candidate === key;
+}
+
+function bind(server: http.Server, port: number): Promise<void> {
+	return new Promise<void>((resolve, reject) => {
+		const onError = (err: Error): void => {
+			server.removeListener('error', onError);
+			reject(err);
+		};
+		server.once('error', onError);
+		server.listen(port, '127.0.0.1', () => {
+			server.removeListener('error', onError);
+			resolve();
+		});
+	});
 }
 
 function readBody(req: http.IncomingMessage): Promise<string> {

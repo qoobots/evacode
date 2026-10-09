@@ -61,7 +61,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 	context.subscriptions.push(provider);
 	context.subscriptions.push(vscode.lm.registerLanguageModelChatProvider(VENDOR, provider));
 
-	const proxy = new EvaLocalProxy(auth);
+	const proxy = new EvaLocalProxy(auth, context.globalState);
 	context.subscriptions.push(proxy);
 	context.subscriptions.push(vscode.commands.registerCommand('eva-ai.startProxy', async () => {
 		try {
