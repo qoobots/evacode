@@ -293,6 +293,16 @@ export class ChatSetupController extends Disposable {
 	}
 
 	private async doInstall(): Promise<void> {
+		// The agent extension belongs to the provider: product.json names GitHub Copilot Chat, which
+		// authenticates against GitHub and cannot serve an account that signs in through another
+		// provider. There is nothing to install in that case, and reaching for the marketplace would
+		// download an extension that can never sign in and then report the setup as failed.
+		const providerId = (await this.defaultAccountService.getDefaultAccount())?.authenticationProvider.id;
+		if (providerId && providerId !== 'github' && providerId !== 'github-enterprise') {
+			this.logService.trace(`[chat setup] install: skipped, provider '${providerId}' has no agent extension`);
+			return;
+		}
+
 		await this.extensionsWorkbenchService.install(defaultChat.chatExtensionId, {
 			enable: true,
 			isApplicationScoped: true, 	// install into all profiles

@@ -1240,6 +1240,16 @@ export class ChatEntitlementRequests extends Disposable {
 	}
 
 	async signUpFree(): Promise<true /* signed up */ | false /* already signed up */ | { errorCode: number } /* error */ | undefined /* no session */> {
+		const defaultAccount = await this.defaultAccountService.getDefaultAccount();
+		// Copilot Free sign-up is a GitHub-only flow: it POSTs to api.github.com with the account's
+		// session token. A non-GitHub default account (e.g. eva) has no GitHub session, so attempting
+		// it would hit GitHub with the wrong token and surface a bogus sign-up error. Report that as
+		// "already signed up" rather than "no session": the caller reads undefined as an unexpected
+		// failure and aborts the whole setup with a retry dialog, whereas false means there is
+		// nothing to sign up for and it carries on.
+		if (defaultAccount && defaultAccount.authenticationProvider.id !== 'github' && defaultAccount.authenticationProvider.id !== 'github-enterprise') {
+			return false;
+		}
 		const sessions = await this.getSessions();
 		if (sessions.length === 0) {
 			return undefined;
