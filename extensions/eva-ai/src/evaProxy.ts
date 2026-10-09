@@ -174,12 +174,12 @@ export class EvaLocalProxy implements vscode.Disposable {
 	private async _forwardChat(config: { readonly aiBaseUrl: string; readonly temperature: number | undefined }, accessToken: string, request: Record<string, unknown>, res: http.ServerResponse): Promise<void> {
 		// OpenAI clients already speak EVA's dialect; they only need the credentials swapped.
 		// Republishing the upstream SSE frames verbatim keeps this route faithful by construction.
-		const target = new URL('/chat/completions', ensureSlash(config.aiBaseUrl));
+		const target = aiUrl(config.aiBaseUrl, '/chat/completions');
 		await this._send(target, accessToken, toUpstreamChatRequest(config, request), res, undefined);
 	}
 
 	private async _forwardJson(config: { readonly aiBaseUrl: string }, accessToken: string, path: string, res: http.ServerResponse): Promise<void> {
-		const target = new URL(path, ensureSlash(config.aiBaseUrl));
+		const target = aiUrl(config.aiBaseUrl, path);
 		const module = target.protocol === 'https:' ? https : http;
 		await new Promise<void>((resolve, reject) => {
 			const upstream = module.request(target, {
@@ -199,7 +199,7 @@ export class EvaLocalProxy implements vscode.Disposable {
 	private async _answerMessages(config: { readonly aiBaseUrl: string; readonly temperature: number | undefined }, accessToken: string, request: Record<string, unknown>, res: http.ServerResponse): Promise<void> {
 		const model = typeof request.model === 'string' ? request.model : 'eva';
 		const upstreamBody = toChatRequestFromMessages(config, request);
-		const target = new URL('/chat/completions', ensureSlash(config.aiBaseUrl));
+		const target = aiUrl(config.aiBaseUrl, '/chat/completions');
 
 		if (request.stream !== true) {
 			const { status, body } = await this._sendCollect(target, accessToken, upstreamBody);
@@ -218,7 +218,7 @@ export class EvaLocalProxy implements vscode.Disposable {
 	private async _answerResponses(config: { readonly aiBaseUrl: string; readonly temperature: number | undefined }, accessToken: string, request: Record<string, unknown>, res: http.ServerResponse): Promise<void> {
 		const model = typeof request.model === 'string' ? request.model : 'eva';
 		const upstreamBody = toChatRequestFromResponses(config, request);
-		const target = new URL('/chat/completions', ensureSlash(config.aiBaseUrl));
+		const target = aiUrl(config.aiBaseUrl, '/chat/completions');
 
 		if (request.stream !== true) {
 			const { status, body } = await this._sendCollect(target, accessToken, upstreamBody);
@@ -1142,8 +1142,12 @@ function parseSseFrame(frame: string): Record<string, unknown> | undefined {
 	return undefined;
 }
 
-function ensureSlash(base: string): string {
-	return base.endsWith('/') ? base : `${base}/`;
+/**
+ * Joins a path onto EVA's base URL. `new URL(path, base)` would resolve a leading `/` as absolute
+ * and silently drop the `/api/ai/v1` prefix, landing on the server root where nothing is served.
+ */
+function aiUrl(aiBaseUrl: string, path: string): URL {
+	return new URL(`${aiBaseUrl.replace(/\/+$/, '')}${path}`);
 }
 
 function errorMessage(err: unknown): string {
