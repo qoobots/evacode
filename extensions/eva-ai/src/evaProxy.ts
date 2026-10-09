@@ -551,7 +551,7 @@ function toOpenAIContent(content: unknown): unknown {
 	return mapped.length === 1 && mapped[0].type === 'text' ? mapped[0].text : mapped;
 }
 
-function toUpstreamChatRequest(config: { readonly temperature: number | undefined }, request: Record<string, unknown>): Record<string, unknown> {
+function toUpstreamChatRequest(_config: { readonly temperature: number | undefined }, request: Record<string, unknown>): Record<string, unknown> {
 	const body: Record<string, unknown> = {
 		model: request.model,
 		stream: request.stream === true,
@@ -559,9 +559,11 @@ function toUpstreamChatRequest(config: { readonly temperature: number | undefine
 	if (typeof request.max_tokens === 'number') {
 		body.max_tokens = request.max_tokens;
 	}
-	const temperature = typeof request.temperature === 'number' ? request.temperature : config.temperature;
-	if (temperature !== undefined) {
-		body.temperature = temperature;
+	// Only what the client asked for. The extension's own temperature setting is for its chat panel,
+	// not for traffic it merely relays: injecting it rejected every call to kimi-k3, which refuses
+	// `temperature` outright, and the client never sent one — the 0.2 in the error was our default.
+	if (typeof request.temperature === 'number') {
+		body.temperature = request.temperature;
 	}
 	if (typeof request.top_p === 'number') {
 		body.top_p = request.top_p;
