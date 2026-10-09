@@ -124,5 +124,13 @@ switch ($Step) {
 }
 
 if ($Step -in @('package', 'package-ci', 'all')) {
-	Write-Host "`n:: Build ready in $(Resolve-Path (Join-Path (Split-Path -Parent $PSScriptRoot) 'VSCode-win32-x64'))" -ForegroundColor Green
+	# The build lands beside the repository, not inside it: `../VSCode-win32-x64` relative to the
+	# repo root, which is the parent of $PSScriptRoot's own parent.
+	$buildDir = Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'VSCode-win32-x64'
+	if (Test-Path $buildDir) {
+		Write-Host "`n:: Build ready in $(Resolve-Path $buildDir)" -ForegroundColor Green
+	}
+	else {
+		Write-Warning "Packaging did not produce $buildDir."
+	}
 }
