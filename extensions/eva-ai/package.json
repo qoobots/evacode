@@ -10,7 +10,8 @@
 	},
 	"main": "./out/extension.js",
 	"enabledApiProposals": [
-		"languageModelThinkingPart"
+		"languageModelThinkingPart",
+		"chatProvider"
 	],
 	"activationEvents": [
 		"onStartupFinished",

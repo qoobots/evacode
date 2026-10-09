@@ -41,6 +41,12 @@ const INITIAL_CHARS_PER_TOKEN = 2;
  */
 type EvaResponsePart = vscode.LanguageModelResponsePart | vscode.LanguageModelThinkingPart;
 
+/**
+ * `isBYOK` is still a proposed field (`vscode.proposed.chatProvider`), so it is absent from the
+ * stable interface included here. It is still read by the extension host, which forwards it as-is.
+ */
+type EvaModelInformation = vscode.LanguageModelChatInformation & { readonly isBYOK?: boolean };
+
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
 	const auth = new EvaAuthService(context.secrets, readConfig);
 	await auth.load();
@@ -197,7 +203,11 @@ class EvaLanguageModelChatProvider implements vscode.LanguageModelChatProvider, 
 					imageInput: false,
 					toolCalling: true,
 				},
-			} satisfies vscode.LanguageModelChatInformation;
+				// Publishes these models to the agent host. Only models flagged `isBYOK` are pushed
+				// to `AgentHostByokLmHandler`, and that handler is what both fills the agent sessions
+				// model catalogue and routes those sessions' inference back through this provider.
+				isBYOK: true,
+			} satisfies EvaModelInformation;
 		});
 
 		// Auto goes first so it is the default pick.
@@ -207,7 +217,7 @@ class EvaLanguageModelChatProvider implements vscode.LanguageModelChatProvider, 
 		// So Auto resolves to that declared default, rather than pretending the platform picks per
 		// request. Its limits are the ones measured for that default model, not a generic guess.
 		const autoLimits = limitsFor(catalog.defaultId ?? AUTO_MODEL_ID, config);
-		models.unshift({
+		const autoModel: EvaModelInformation = {
 			id: AUTO_MODEL_ID,
 			name: '自动（Auto）',
 			family: 'auto',
@@ -220,7 +230,9 @@ class EvaLanguageModelChatProvider implements vscode.LanguageModelChatProvider, 
 				imageInput: false,
 				toolCalling: true,
 			},
-		});
+			isBYOK: true,
+		};
+		models.unshift(autoModel);
 
 		this.cacheKey = key;
 		this.cachedModels = models;
