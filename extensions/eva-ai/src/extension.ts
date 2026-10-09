@@ -86,13 +86,31 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 		vscode.window.showInformationMessage('EVA 本地代理已停止。');
 	}));
 
+	const proxyLog = vscode.window.createOutputChannel('Eva AI 本地代理');
+	context.subscriptions.push(proxyLog);
+
 	/**
-	 * One model per Claude Code tier, each from a different vendor: the tiers are independent slots
-	 * the picker renders as separate entries, and four sizes of one family read like a menu but
-	 * behave like one model. Within a vendor the strongest published entry wins, so an obsolete
-	 * release never takes a slot just by matching a name — `qwen-max` sits beside `qwen3.8-max`,
-	 * and only the latter reasons or sees past 32k tokens.
+	 * The proxy has to come up on its own, because nothing rewrites the CLI configurations it hands
+	 * out: those files carry a fixed loopback port and a key persisted across windows, and they are
+	 * read back long after the window that wrote them has closed. A window that never binds the port
+	 * therefore strands every external CLI on a dead endpoint until someone runs the command by
+	 * hand — which is what the address in `ANTHROPIC_BASE_URL` was pointing at all along.
 	 */
+	function ensureProxy(): void {
+		if (!auth.isSignedIn || proxy.info) {
+			return;
+		}
+		void proxy.start().then(
+			info => proxyLog.appendLine(`已启动：${info.baseUrl}`),
+			err => proxyLog.appendLine(`启动失败：${errorMessage(err)}`),
+		);
+	}
+
+	ensureProxy();
+	// Signing in usually happens after this ran, so the first attempt can meet an empty session.
+	context.subscriptions.push(authProvider.onDidChangeSessions(() => ensureProxy()));
+
+	/** Resolves the four tiers against what the gateway currently serves; see CLI_TIER_MODELS. */
 	async function resolveCliModels(): Promise<CliModelSlots | undefined> {
 		const tokenSource = new vscode.CancellationTokenSource();
 		try {
