@@ -86,44 +86,113 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 		vscode.window.showInformationMessage('EVA 本地代理已停止。');
 	}));
 
-	/** `deepseek-v4-pro-0813` → `deepseek`: the gateway reports ids only, so the vendor is inferred. */
+	/** `deepseek-v4-pro-0813` → `deepseek`: only a fallback, for when the registry is unreachable. */
 	function brandOf(id: string): string {
 		return id.split('-')[0].replace(/[\d.]/g, '');
 	}
 
-	/** First id from a vendor not already taken, preferring ones whose name matches `weight`. */
-	function pickTier(ids: readonly string[], used: Set<string>, weight: RegExp): string | undefined {
-		const fresh = (id: string): boolean => !used.has(brandOf(id));
-		const hit = ids.find(id => fresh(id) && weight.test(id)) ?? ids.find(fresh);
-		if (hit) {
-			used.add(brandOf(hit));
-		}
-		return hit;
+	/**
+	 * `qwen3.8-max` → 3.8. Compared only within a vendor: capability tags do not distinguish
+	 * generations, so without this an obsolete release wins on a coin toss — `qwen3.7-plus` and
+	 * `qwen3.8-max` carry identical tags and contexts.
+	 */
+	function versionOf(code: string): number {
+		const match = code.match(/\d+(?:\.\d+)?/);
+		return match ? Number.parseFloat(match[0]) : 0;
 	}
 
 	/**
-	 * Picks one model per Claude Code tier from what the gateway actually offers. Each tier is an
-	 * independent slot the picker renders as its own entry, and a vendor per tier turns that into a
-	 * real choice: four sizes of the same family look like a menu but behave like one model.
+	 * `max`/`pro` outrank `plus`, which outranks `flash`/`turbo` — the light variants are cheaper
+	 * and faster, so they must not take the main slot from a same-generation flagship.
+	 */
+	function tierOf(code: string): number {
+		if (/max|pro|ultra/i.test(code)) {
+			return 2;
+		}
+		return /flash|turbo|lite|mini/i.test(code) ? 0 : 1;
+	}
+
+	interface ModelDetail {
+		readonly code: string;
+		readonly provider: string;
+		readonly capabilities: readonly string[];
+		readonly contextWindow: number;
+	}
+
+	/**
+	 * Reads EVA's own registry, the one place capability is published — the versioned `/models`
+	 * route returns bare ids. Yields an empty list on any failure so selection degrades to names
+	 * rather than failing the command.
+	 */
+	async function fetchModelDetails(): Promise<ModelDetail[]> {
+		const token = await auth.getAccessToken();
+		if (!token) {
+			return [];
+		}
+		const url = `${readConfig().aiBaseUrl.replace(/\/+$/, '').replace(/\/v\d+$/, '')}/models/square?page=1&size=1000`;
+		try {
+			const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+			if (!response.ok) {
+				return [];
+			}
+			const raw = await response.json() as { data?: { content?: Array<Record<string, unknown>> } };
+			return (raw.data?.content ?? []).map(row => ({
+				code: String(row.modelCode ?? ''),
+				provider: String(row.providerCode ?? ''),
+				capabilities: Array.isArray(row.capabilities) ? row.capabilities.map(String) : [],
+				contextWindow: typeof row.contextWindow === 'number' ? row.contextWindow : 0,
+			}));
+		} catch {
+			return [];
+		}
+	}
+
+	/**
+	 * One model per Claude Code tier, each from a different vendor: the tiers are independent slots
+	 * the picker renders as separate entries, and four sizes of one family read like a menu but
+	 * behave like one model. Within a vendor the strongest published entry wins, so an obsolete
+	 * release never takes a slot just by matching a name — `qwen-max` sits beside `qwen3.8-max`,
+	 * and only the latter reasons or sees past 32k tokens.
 	 */
 	async function resolveCliModels(): Promise<CliModelSlots | undefined> {
 		const tokenSource = new vscode.CancellationTokenSource();
 		try {
 			const infos = await provider.provideLanguageModelChatInformation({ silent: true }, tokenSource.token);
-			// Auto heads the list; the entry after it is the gateway's own preferred model.
 			const ids = infos.map(info => info.id).filter(id => id !== AUTO_MODEL_ID);
-			const main = readConfig().defaultModel || ids[0];
-			if (!main) {
+			const anchor = readConfig().defaultModel || ids[0];
+			if (!anchor) {
 				return undefined;
 			}
-			// Weight has to be read off the name, since the gateway exposes ids and nothing else;
-			// a tier that finds no fresh vendor falls back rather than to something unvetted.
-			const used = new Set([brandOf(main)]);
+
+			const details = await fetchModelDetails();
+			// Tool use is not optional here: a tier without it fails the moment Claude Code calls one.
+			const usable = details
+				.filter(detail => ids.includes(detail.code) && detail.capabilities.includes('函数调用'))
+				.sort((a, b) => b.capabilities.length - a.capabilities.length
+					|| b.contextWindow - a.contextWindow
+					|| tierOf(b.code) - tierOf(a.code)
+					|| versionOf(b.code) - versionOf(a.code)
+					|| a.code.localeCompare(b.code));
+
+			const bestOf = new Map<string, string>();
+			for (const detail of usable) {
+				if (!bestOf.has(detail.provider)) {
+					bestOf.set(detail.provider, detail.code);
+				}
+			}
+			if (!bestOf.size) {
+				return { main: anchor, opus: anchor, haiku: anchor, fable: anchor };
+			}
+
+			// Stay on the vendor the gateway itself recommends, but on that vendor's current release.
+			const anchorVendor = details.find(detail => detail.code === anchor)?.provider ?? brandOf(anchor);
+			const main = bestOf.get(anchorVendor) ?? anchor;
+			const others = [...bestOf.keys()].filter(vendor => vendor !== anchorVendor);
 			return {
 				main,
-				opus: pickTier(ids, used, /max|pro/i) ?? main,
-				haiku: pickTier(ids, used, /flash|turbo|lite|mini/i) ?? main,
-				fable: pickTier(ids, used, /./) ?? main,
+				opus: bestOf.get(others[0]) ?? main,
+				fable: bestOf.get(others[1]) ?? main,
+				haiku: bestOf.get(others[others.length - 1]) ?? main,
 			};
 		} finally {
 			tokenSource.dispose();
