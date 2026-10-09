@@ -86,11 +86,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 		vscode.window.showInformationMessage('EVA 本地代理已停止。');
 	}));
 
-	/** `deepseek-v4-pro-0813` → `deepseek`: only a fallback, for when the registry is unreachable. */
-	function brandOf(id: string): string {
-		return id.split('-')[0].replace(/[\d.]/g, '');
-	}
-
 	/**
 	 * `qwen3.8-max` → 3.8. Compared only within a vendor: capability tags do not distinguish
 	 * generations, so without this an obsolete release wins on a coin toss — `qwen3.7-plus` and
@@ -167,46 +162,42 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 			}
 
 			const details = await fetchModelDetails();
+			// kimi-k3 answers 400 to any request carrying `temperature`, which Claude Code sends, and
+			// EVA publishes no marker for it — so it is named here instead of filtered by ability.
+			const unusable = new Set(['kimi-k3']);
 			// Tool use is not optional here: a tier without it fails the moment Claude Code calls one.
 			const usable = details
-				.filter(detail => ids.includes(detail.code) && detail.capabilities.includes('函数调用'))
+				.filter(detail => ids.includes(detail.code)
+					&& detail.capabilities.includes('函数调用')
+					&& !unusable.has(detail.code))
 				.sort((a, b) => b.capabilities.length - a.capabilities.length
 					|| b.contextWindow - a.contextWindow
 					|| tierOf(b.code) - tierOf(a.code)
 					|| versionOf(b.code) - versionOf(a.code)
 					|| a.code.localeCompare(b.code));
-
-			const bestOf = new Map<string, string>();
-			for (const detail of usable) {
-				if (!bestOf.has(detail.provider)) {
-					bestOf.set(detail.provider, detail.code);
-				}
-			}
-			if (!bestOf.size) {
+			if (!usable.length) {
 				return { main: anchor, opus: anchor, haiku: anchor, fable: anchor };
 			}
-			const types = new Map(details.map(detail => [detail.code, detail.type]));
 
-			// Stay on the vendor the gateway itself recommends, but on that vendor's current release.
-			const anchorVendor = details.find(detail => detail.code === anchor)?.provider ?? brandOf(anchor);
-			const main = bestOf.get(anchorVendor) ?? anchor;
-			const others = [...bestOf.keys()].filter(vendor => vendor !== anchorVendor);
+			// Tiers are filled for cost, not for maximum capability: the session runs on Sonnet, Opus
+			// is only worth its price when the user reaches for it, and Haiku — which writes session
+			// titles and summaries — must never be billed at flagship rates.
+			const providerOf = (code: string): string => usable.find(detail => detail.code === code)?.provider ?? '';
+			const main = usable.some(detail => detail.code === anchor) ? anchor : usable[0].code;
+			const mainVendor = providerOf(main);
+			const opus = usable.find(detail => detail.code !== main && detail.provider !== mainVendor)?.code ?? main;
 
-			// Opus is the tier the session actually runs on, so it takes the strongest plain-text
-			// entry rather than the strongest overall: kimi-k3 outranks every rival on capability
-			// yet rejects `temperature`, which Claude Code sends, and a tier that answers 400 on
-			// arrival is worse than one with fewer tags. It lands on the spare tier, where failing
-			// costs nothing — Haiku keeps the weakest, since it only does titles and summaries.
-			const opusVendor = others.find(vendor => types.get(bestOf.get(vendor) ?? '') === 'llm') ?? others[0];
-			const rest = others.filter(vendor => vendor !== opusVendor);
-			const haikuVendor = rest[rest.length - 1];
-			const fableVendor = rest.find(vendor => vendor !== haikuVendor) ?? rest[0];
-			return {
-				main,
-				opus: bestOf.get(opusVendor) ?? main,
-				haiku: bestOf.get(haikuVendor) ?? main,
-				fable: bestOf.get(fableVendor) ?? main,
-			};
+			const cheapest = usable
+				.filter(detail => detail.code !== main && detail.code !== opus)
+				.sort((a, b) => tierOf(a.code) - tierOf(b.code)
+					|| a.capabilities.length - b.capabilities.length
+					|| a.contextWindow - b.contextWindow);
+			const haiku = cheapest[0]?.code ?? main;
+			const taken = new Set([mainVendor, providerOf(opus), providerOf(haiku)]);
+			const fable = cheapest.find(detail => detail.code !== haiku && !taken.has(detail.provider))?.code
+				?? cheapest.find(detail => detail.code !== haiku)?.code
+				?? main;
+			return { main, opus, haiku, fable };
 		} finally {
 			tokenSource.dispose();
 		}
