@@ -456,18 +456,9 @@
 	justify-content: center;
 }
 
-
-
-
-
 .onboarding-a-provider-mark.eva {
 	background-image: url('../../../../browser/media/eva-logo.png');
 }
-
-
-
-
-
 
 /* Personalize step */
 .onboarding-a-personalize {
@@ -748,9 +739,6 @@
 	justify-content: center;
 }
 
-
-
-
 .onboarding-a-signin-btn.primary {
 	background: var(--vscode-button-background);
 	color: var(--vscode-button-foreground);
@@ -767,7 +755,6 @@
 		0 0 0 2px var(--vscode-editorWidget-background, #252526),
 		0 0 0 4px var(--vscode-focusBorder);
 }
-
 
 .onboarding-a-signin-btn.primary .onboarding-a-signin-btn-label {
 	color: var(--vscode-button-foreground);
@@ -815,7 +802,6 @@
 	.onboarding-a-signin-btn {
 		grid-column: 1 / -1;
 	}
-
 
 	.onboarding-a-theme-grid {
 		grid-template-columns: repeat(2, minmax(0, 1fr));

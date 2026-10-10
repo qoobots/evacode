@@ -20,11 +20,7 @@
 	}
 
 	.dialog-buttons-row > .dialog-buttons > .monaco-button.continue-button.default::before {
-		background-image: url('./github.svg');
-	}
-
-	.dialog-buttons-row > .dialog-buttons > .monaco-button.continue-button.google::before {
-		background-image: url('./google.svg');
+		background-image: url('../../../../../browser/media/eva-logo.png');
 	}
 
 	/* Link Buttons */
@@ -51,30 +47,19 @@
 	}
 }
 
-.monaco-workbench.hc-light .chat-setup-dialog .dialog-buttons-row > .dialog-buttons > .monaco-button.continue-button.apple::before,
-.monaco-workbench.vs .chat-setup-dialog .dialog-buttons-row > .dialog-buttons > .monaco-button.continue-button.apple::before {
-	background-image: url('./apple-light.svg');
-}
+/* Dialog icon: the codicon class only supplies the box the icon font would have used, and an
+ * icon that has no glyph in the font also has no width, so the background image needs a box
+ * sized explicitly. dialog.css sizes the height (64px in the vertical layout this dialog uses,
+ * 24px otherwise) and leaves the width to the glyph, which is what the rules below restore. */
 
-.chat-setup-dialog .dialog-buttons-row > .dialog-buttons > .monaco-button.continue-button.apple::before {
-	background-image: url('./apple-dark.svg');
-}
-
-.monaco-workbench.hc-light .chat-setup-dialog .dialog-buttons-row > .dialog-buttons > .monaco-button.continue-button.microsoft::before,
-.monaco-workbench.vs .chat-setup-dialog .dialog-buttons-row > .dialog-buttons > .monaco-button.continue-button.microsoft::before {
-	background-image: url('./microsoft-light.svg');
-}
-
-.chat-setup-dialog .dialog-buttons-row > .dialog-buttons > .monaco-button.continue-button.microsoft::before {
-	background-image: url('./microsoft-dark.svg');
-}
-
-/* Dialog icon: the codicon class only supplies the box the icon font would have used, the
- * product mark itself is an image (see the onboarding sign-in step, which shows the same one). */
-
-.chat-setup-dialog .dialog-message-row > .dialog-icon.codicon-eva-logo {
+.monaco-dialog-box .dialog-message-row > .dialog-icon.codicon-eva-logo {
+	width: 24px;
 	background-image: url('../../../../../browser/media/eva-logo.png');
 	background-repeat: no-repeat;
 	background-position: center;
 	background-size: contain;
+}
+
+.monaco-dialog-box.align-vertical .dialog-message-row > .dialog-icon.codicon-eva-logo {
+	width: 64px;
 }
