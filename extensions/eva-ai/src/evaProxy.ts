@@ -9,6 +9,7 @@ import * as https from 'https';
 import * as vscode from 'vscode';
 import type { EvaAuthService } from './evaAuth';
 import { readConfig } from './evaConfig';
+import { beginTrace, readTraceConfig, type EvaTraceBegin } from './evaTrace';
 
 /**
  * Fixed by default rather than ephemeral: the CLI configurations we write carry this address and
@@ -183,7 +184,11 @@ export class EvaLocalProxy implements vscode.Disposable {
 		// OpenAI clients already speak EVA's dialect; they only need the credentials swapped.
 		// Republishing the upstream SSE frames verbatim keeps this route faithful by construction.
 		const target = aiUrl(config.aiBaseUrl, '/chat/completions');
-		await this._send(target, accessToken, toUpstreamChatRequest(config, request), res, undefined);
+		await this._send(target, accessToken, toUpstreamChatRequest(config, request), res, undefined, requestToMessagesError, {
+			source: 'openai',
+			route: 'POST /v1/chat/completions',
+			model: typeof request.model === 'string' ? request.model : undefined,
+		});
 	}
 
 	private async _forwardJson(accessToken: string, target: URL, res: http.ServerResponse): Promise<void> {
@@ -208,8 +213,18 @@ export class EvaLocalProxy implements vscode.Disposable {
 		const upstreamBody = toChatRequestFromMessages(config, request);
 		const target = aiUrl(config.aiBaseUrl, '/chat/completions');
 
+		// The client's own body is logged alongside ours: Claude Code's `system` blocks and
+		// tool_use/tool_result content differ from the OpenAI shape we send upstream, and knowing
+		// which side a given redundancy came from is part of what the log is for.
+		const trace: EvaTraceBegin = {
+			source: 'claude-code',
+			route: 'POST /v1/messages',
+			model,
+			clientRequest: request,
+		};
+
 		if (request.stream !== true) {
-			const { status, body } = await this._sendCollect(target, accessToken, upstreamBody);
+			const { status, body } = await this._sendCollect(target, accessToken, upstreamBody, trace);
 			if (status !== 200) {
 				writeJson(res, status, requestToMessagesError(safeJson(body)));
 				return;
@@ -219,7 +234,7 @@ export class EvaLocalProxy implements vscode.Disposable {
 		}
 
 		const state = new MessageStreamState(model);
-		await this._send(target, accessToken, upstreamBody, res, frame => state.takeOpenAIFrame(frame));
+		await this._send(target, accessToken, upstreamBody, res, frame => state.takeOpenAIFrame(frame), requestToMessagesError, trace);
 	}
 
 	private async _answerResponses(config: { readonly aiBaseUrl: string; readonly temperature: number | undefined }, accessToken: string, request: Record<string, unknown>, res: http.ServerResponse): Promise<void> {
@@ -227,8 +242,17 @@ export class EvaLocalProxy implements vscode.Disposable {
 		const upstreamBody = toChatRequestFromResponses(config, request);
 		const target = aiUrl(config.aiBaseUrl, '/chat/completions');
 
+		// See the Messages route: Codex sends `input` items rather than `messages`, so the client
+		// body is worth keeping next to the one we send upstream.
+		const trace: EvaTraceBegin = {
+			source: 'codex',
+			route: 'POST /v1/responses',
+			model,
+			clientRequest: request,
+		};
+
 		if (request.stream !== true) {
-			const { status, body } = await this._sendCollect(target, accessToken, upstreamBody);
+			const { status, body } = await this._sendCollect(target, accessToken, upstreamBody, trace);
 			if (status !== 200) {
 				writeJson(res, status, requestToResponsesError(safeJson(body)));
 				return;
@@ -238,7 +262,7 @@ export class EvaLocalProxy implements vscode.Disposable {
 		}
 
 		const state = new ResponsesStreamState(model);
-		await this._send(target, accessToken, upstreamBody, res, frame => state.takeOpenAIFrame(frame), requestToResponsesError);
+		await this._send(target, accessToken, upstreamBody, res, frame => state.takeOpenAIFrame(frame), requestToResponsesError, trace);
 	}
 
 	// #endregion
@@ -252,9 +276,11 @@ export class EvaLocalProxy implements vscode.Disposable {
 		res: http.ServerResponse,
 		translate?: (frame: Record<string, unknown>) => string | undefined,
 		errorToDialect: (raw: Record<string, unknown>) => Record<string, unknown> = requestToMessagesError,
+		trace?: EvaTraceBegin,
 	): Promise<void> {
 		const module = target.protocol === 'https:' ? https : http;
 		const payload = JSON.stringify(body);
+		const span = trace ? beginTrace(readTraceConfig(), { ...trace, url: target.toString(), request: body }) : undefined;
 
 		return new Promise<void>((resolve, reject) => {
 			const upstream = module.request(target, {
@@ -275,11 +301,16 @@ export class EvaLocalProxy implements vscode.Disposable {
 						'cache-control': 'no-cache',
 						'connection': 'keep-alive',
 					});
-					pipeSse(upstreamRes, res, translate, () => resolve());
+					pipeSse(upstreamRes, res, translate, frame => span?.noteOpenAIFrame(frame), () => {
+						span?.finish(status);
+						resolve();
+					});
 					return;
 				}
 
 				void readBody(upstreamRes).then(raw => {
+					span?.noteRawResponse(raw);
+					span?.finish(status);
 					if (translate) {
 						// Upstream refused to stream (e.g. an error body); surface it in the
 						// caller's dialect rather than leaking OpenAI's shape to a Messages client.
@@ -290,14 +321,18 @@ export class EvaLocalProxy implements vscode.Disposable {
 					resolve();
 				}, reject);
 			});
-			upstream.on('error', reject);
+			upstream.on('error', err => {
+				span?.fail(err);
+				reject(err);
+			});
 			upstream.end(payload);
 		});
 	}
 
-	private _sendCollect(target: URL, accessToken: string, body: unknown): Promise<{ status: number; body: string }> {
+	private _sendCollect(target: URL, accessToken: string, body: unknown, trace?: EvaTraceBegin): Promise<{ status: number; body: string }> {
 		const module = target.protocol === 'https:' ? https : http;
 		const payload = JSON.stringify(body);
+		const span = trace ? beginTrace(readTraceConfig(), { ...trace, url: target.toString(), request: body }) : undefined;
 		return new Promise((resolve, reject) => {
 			const upstream = module.request(target, {
 				method: 'POST',
@@ -307,9 +342,16 @@ export class EvaLocalProxy implements vscode.Disposable {
 					'authorization': `Bearer ${accessToken}`,
 				},
 			}, upstreamRes => {
-				void readBody(upstreamRes).then(raw => resolve({ status: upstreamRes.statusCode ?? 502, body: raw }), reject);
+				void readBody(upstreamRes).then(raw => {
+					span?.noteRawResponse(raw);
+					span?.finish(upstreamRes.statusCode ?? 502);
+					resolve({ status: upstreamRes.statusCode ?? 502, body: raw });
+				}, reject);
 			});
-			upstream.on('error', reject);
+			upstream.on('error', err => {
+				span?.fail(err);
+				reject(err);
+			});
 			upstream.end(payload);
 		});
 	}
@@ -1098,6 +1140,7 @@ function pipeSse(
 	source: http.IncomingMessage,
 	target: http.ServerResponse,
 	translate: ((chunk: Record<string, unknown>) => string | undefined) | undefined,
+	onFrame: ((chunk: Record<string, unknown>) => void) | undefined,
 	onEnd: () => void,
 ): void {
 	let buffer = '';
@@ -1109,7 +1152,14 @@ function pipeSse(
 			const frame = buffer.slice(0, split);
 			buffer = buffer.slice(split + 2);
 			if (!translate) {
-				// OpenAI-native client: republish untouched so we add no behavioural drift.
+				// OpenAI-native client: republish untouched so we add no behavioural drift. The
+				// frame is still parsed, but only when someone is listening, and never rewritten.
+				if (onFrame) {
+					const parsed = parseSseFrame(frame);
+					if (parsed) {
+						onFrame(parsed);
+					}
+				}
 				target.write(`${frame}\n\n`);
 				continue;
 			}
@@ -1117,6 +1167,7 @@ function pipeSse(
 			if (!parsed) {
 				continue;
 			}
+			onFrame?.(parsed);
 			const translated = translate(parsed);
 			if (translated) {
 				target.write(translated);

@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
+import { beginTrace, readTraceConfig, type EvaTraceSpan } from './evaTrace';
 
 /**
  * Streaming client for the EVA AI OpenAI-compatible chat endpoint.
@@ -109,6 +110,16 @@ async function runOnce(request: EvaChatRequest, temperature: number | undefined)
 		body.tools = tools;
 	}
 
+	// Captured after the body is complete and before it is sent, so the log holds exactly what the
+	// gateway receives. This is the only route the Chat view and agent sessions take to EVA.
+	const span = beginTrace(readTraceConfig(), {
+		source: 'copilot',
+		route: 'POST /chat/completions',
+		url,
+		model: request.model,
+		request: body,
+	});
+
 	let response: Response;
 	try {
 		response = await fetch(url, {
@@ -121,6 +132,7 @@ async function runOnce(request: EvaChatRequest, temperature: number | undefined)
 			signal: request.signal,
 		});
 	} catch (err) {
+		span?.fail(err);
 		if (isAbort(err, request.signal)) {
 			return;
 		}
@@ -129,13 +141,20 @@ async function runOnce(request: EvaChatRequest, temperature: number | undefined)
 
 	if (!response.ok || !response.body) {
 		const text = await response.text().catch(() => '');
+		span?.fail(`HTTP ${response.status}：${text.slice(0, 300)}`, response.status);
 		throw new Error(`EVA AI 网关返回 HTTP ${response.status}${response.status === 401 || response.status === 403 ? '（登录态已失效，请重新登录）' : ''}：${text.slice(0, 300)}`);
 	}
 
-	await readStream(response, request.handlers, temperature !== undefined);
+	try {
+		await readStream(response, request.handlers, temperature !== undefined, span);
+		span?.finish(response.status);
+	} catch (err) {
+		span?.fail(err, response.status);
+		throw err;
+	}
 }
 
-async function readStream(response: Response, handlers: EvaStreamHandlers, hadTemperature: boolean): Promise<void> {
+async function readStream(response: Response, handlers: EvaStreamHandlers, hadTemperature: boolean, span: EvaTraceSpan | undefined): Promise<void> {
 	const reader = response.body!.getReader();
 	const decoder = new TextDecoder();
 	const pending = new Map<number, { id: string; name: string; args: string }>();
@@ -178,6 +197,7 @@ async function readStream(response: Response, handlers: EvaStreamHandlers, hadTe
 
 				if (frame?.usage) {
 					handlers.onUsage?.(frame.usage);
+					span?.noteUsage(frame.usage);
 				}
 
 				const choice = frame?.choices?.[0];
@@ -188,6 +208,7 @@ async function readStream(response: Response, handlers: EvaStreamHandlers, hadTe
 
 				if (typeof delta.content === 'string' && delta.content) {
 					handlers.onText(delta.content);
+					span?.noteText(delta.content);
 				}
 
 				// Reasoning is not standardised across OpenAI-compatible gateways: DashScope/Qwen
@@ -196,6 +217,7 @@ async function readStream(response: Response, handlers: EvaStreamHandlers, hadTe
 				const thinking = delta.reasoning_content ?? delta.reasoning ?? delta.reasoning_text;
 				if (typeof thinking === 'string' && thinking) {
 					handlers.onThinking(thinking);
+					span?.noteText(thinking, 'thinking');
 				}
 
 				if (Array.isArray(delta.tool_calls)) {
@@ -216,32 +238,33 @@ async function readStream(response: Response, handlers: EvaStreamHandlers, hadTe
 				}
 
 				if (choice.finish_reason) {
-					emitToolCalls(pending, handlers);
+					emitToolCalls(pending, handlers, span);
 					return;
 				}
-			}
-		}
-	} finally {
-		try {
-			await reader.cancel();
-		} catch {
-			// stream already finished
-		}
-	}
+				}
+				}
+				} finally {
+				try {
+				await reader.cancel();
+				} catch {
+				// stream already finished
+				}
+				}
 
-	// The stream ended without a finish_reason: still deliver whatever tool calls accumulated.
-	emitToolCalls(pending, handlers);
-}
+				// The stream ended without a finish_reason: still deliver whatever tool calls accumulated.
+				emitToolCalls(pending, handlers, span);
+				}
 
-function emitToolCalls(pending: Map<number, { id: string; name: string; args: string }>, handlers: EvaStreamHandlers): void {
-	const calls: EvaToolCall[] = [...pending.entries()]
-		.sort((a, b) => a[0] - b[0])
-		.map(([, value]) => ({ id: value.id, name: value.name, arguments: value.args }))
-		.filter(call => call.name);
-	if (calls.length) {
-		handlers.onToolCall(calls);
-	}
-}
+				function emitToolCalls(pending: Map<number, { id: string; name: string; args: string }>, handlers: EvaStreamHandlers, span: EvaTraceSpan | undefined): void {
+				const calls: EvaToolCall[] = [...pending.entries()]
+				.sort((a, b) => a[0] - b[0])
+				.map(([, value]) => ({ id: value.id, name: value.name, arguments: value.args }))
+				.filter(call => call.name);
+				if (calls.length) {
+				handlers.onToolCall(calls);
+				span?.noteToolCall(calls);
+				}
+				}
 
 function extractUpstreamError(frame: any): string | undefined {
 	if (!frame) {

@@ -10,6 +10,7 @@ import { readConfig, type EvaConfig } from './evaConfig';
 import { streamChat, type EvaUsage } from './evaChat';
 import { AUTO_MODEL_ID, describeModel, fetchModels, limitsFor, orderModels, type EvaModelCatalog } from './evaModels';
 import { EvaLocalProxy } from './evaProxy';
+import { readTraceConfig, setTraceDirectory, setTraceLogger } from './evaTrace';
 import { applyCliConfig, cliTargets, CLI_TIER_MODELS, restoreCliConfig, type CliModelSlots } from './evaCliConfig';
 
 /**
@@ -88,6 +89,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
 	const proxyLog = vscode.window.createOutputChannel('Eva AI 本地代理');
 	context.subscriptions.push(proxyLog);
+
+	// Fallback directory for the interaction log and where a failed write is reported. Neither the
+	// model provider nor the proxy ever sees the extension context, so the path is captured here.
+	setTraceDirectory(context.globalStorageUri.fsPath);
+	setTraceLogger(line => proxyLog.appendLine(line));
+	const tracing = readTraceConfig();
+	if (tracing.enabled) {
+		proxyLog.appendLine(`交互日志已开启，写入 ${tracing.directory}`);
+	}
+
+	context.subscriptions.push(vscode.commands.registerCommand('eva-ai.openTraceFolder', async () => {
+		await vscode.env.openExternal(vscode.Uri.file(readTraceConfig().directory));
+	}));
 
 	/**
 	 * The proxy has to come up on its own, because nothing rewrites the CLI configurations it hands

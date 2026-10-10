@@ -49,11 +49,15 @@
 				"command": "eva-ai.applyToCodex",
 				"title": "Eva AI: 应用到 Codex"
 			},
-			{
-				"command": "eva-ai.restoreCliConfig",
-				"title": "Eva AI: 还原 CLI 配置"
-			}
-		],
+		{
+			"command": "eva-ai.restoreCliConfig",
+			"title": "Eva AI: 还原 CLI 配置"
+		},
+		{
+			"command": "eva-ai.openTraceFolder",
+			"title": "Eva AI: 打开交互日志目录"
+		}
+	],
 		"languageModelChatProviders": [
 			{
 				"vendor": "eva-ai",
@@ -105,6 +109,21 @@
 					"type": "number",
 					"default": 8192,
 					"description": "仅用于「未实测」模型或服务端不校验输出上限的模型的兜底值。已知模型一律使用从 EVA 实测到的真实值。"
+				},
+				"eva-ai.trace.enabled": {
+					"type": "boolean",
+					"default": false,
+					"description": "把每次大模型交互的完整输入与输出写入日志文件，用于分析上下文构成。日志含用户代码与提示词原文，默认关闭。"
+				},
+				"eva-ai.trace.directory": {
+					"type": "string",
+					"default": "",
+					"description": "交互日志目录：按日期建子目录，每次请求一个 JSON 文件。留空时使用扩展 globalStorage 下的 eva-ai-trace。"
+				},
+				"eva-ai.trace.maxChars": {
+					"type": "number",
+					"default": 1000000,
+					"description": "单条记录中每个字段（请求、响应文本等）的最大字符数，超出部分截断并记录截断量。默认约 1MB，够容纳完整的一轮对话。"
 				}
 			}
 		}
