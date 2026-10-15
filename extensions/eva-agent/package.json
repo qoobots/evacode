@@ -1,0 +1,61 @@
+{
+	"name": "eva-agent",
+	"displayName": "Eva Agent",
+	"description": "Eva's own coding agent: a self-developed agent loop that runs on EVA models.",
+	"version": "0.0.1",
+	"publisher": "vscode",
+	"license": "MIT",
+	"engines": {
+		"vscode": "*"
+	},
+	"main": "./dist/extension.js",
+	"enabledApiProposals": [
+		"chatSessionsProvider"
+	],
+	"activationEvents": [
+		"onStartupFinished"
+	],
+	"contributes": {
+		"chatSessions": [
+			{
+				"type": "eva-agent",
+				"name": "eva-agent",
+				"displayName": "Eva Agent",
+				"icon": "$(hubot)",
+				"welcomeTitle": "Eva Agent",
+				"welcomeMessage": "Eva's own coding agent. Describe a task and it will plan, edit and verify.",
+				"inputPlaceholder": "Describe a task for Eva Agent",
+				"order": 10,
+				"capabilities": {
+					"supportsFileAttachments": true,
+					"supportsProblemAttachments": true,
+					"supportsSymbolAttachments": true,
+					"supportsSearchResultAttachments": true,
+					"supportsSourceControlAttachments": false,
+					"supportsImageAttachments": false,
+					"supportsToolAttachments": true,
+					"supportsPromptAttachments": true
+				}
+			}
+		],
+		"configuration": {
+			"title": "Eva Agent",
+			"properties": {
+				"eva-agent.maxTurns": {
+					"type": "number",
+					"default": 24,
+					"description": "Safety cap on how many model round-trips one request may take. The loop stops and reports when it is reached."
+				},
+				"eva-agent.modelVendor": {
+					"type": "string",
+					"default": "eva-ai",
+					"description": "Vendor whose models the agent loop runs on. The default is the EVA gateway published by the Eva AI extension."
+				}
+			}
+		}
+	},
+	"scripts": {
+		"compile": "gulp compile-extension:eva-agent",
+		"watch": "gulp watch-extension:eva-agent"
+	}
+}
