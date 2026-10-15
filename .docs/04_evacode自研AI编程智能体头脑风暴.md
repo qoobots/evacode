@@ -226,9 +226,50 @@
 
 **关键洞察**：前 4 顺位**都不需要自研 loop**。这意味着"自研智能体"这件事可以先不当成自研 loop 来做——先做成"任何 loop 都变得更强"的增强层。
 
+> **拍板后新增两个方向**（来自 Q5 与 Q6）：
+>
+> | 方向 | 内容 | 顺位 |
+> |---|---|---|
+> | **D8 模型来源可配置** | 内置 EVA 网关 / 内网自建网关 / 本地 OpenAI 兼容端点（vLLM、Ollama）/ 直接填 DeepSeek·Qwen apikey。**这是内网部署的硬要求** | **与 D3 并列第 1**（Q5 是硬约束） |
+> | **W-Eval 评测体系** | 任务集 + 自动判定 + 指标 + 横向对照 + 回归 | **P0 就启动**，与开发并行（Q1+Q6 共同要求） |
+>
+> 同时，Q3 把"任务处理能力与质量"定为商业第一诉求，因此 **D4（合规/成本）从卖点降为及格线**，
+> 而 **D3（接地）与 D2（上下文）升为决定体验的两大支柱**。
+
 ---
 
 ## 3. 收敛：三条候选路线
+
+> ### ✅ 已拍板（2026-10-15）：采用「路线 I′」——插件形态
+>
+> **自研智能体做成一个内置扩展（`extensions/eva-agent`），不去 `agentHostMain.ts` 注册第四个 provider。**
+>
+> 决定性依据：**这不是绕路，而是被 API 显式支持的一等路径，并且仓库里已有生产级样板。**
+> `extensions/copilot/src/extension/chatSessions/vscode-node/` 里的 Copilot CLI 会话**本身就是一个扩展**
+> 实现的——它用三个扩展 API 拿到了完整的会话体验：
+>
+> | API | 位置 | 作用 |
+> |---|---|---|
+> | `vscode.chat.registerChatSessionContentProvider(scheme, provider, defaultParticipant, capabilities?)` | `src/vscode-dts/vscode.proposed.chatSessionsProvider.d.ts:599` | 拥有一种会话类型的**内容**与**默认参与者**；`extensions/copilot/src/extension/chatSessions/vscode-node/chatSessions.ts:187` 在用 |
+> | `vscode.chat.createChatSessionItemController` / `registerChatSessionItemProvider` | 同文件 `:48` / `:45`；`copilotCLIChatSessions.ts:179` | 拥有**会话列表**（侧栏那个 session 列表） |
+> | `contributes.chatSessions` | `extensions/copilot/package.json:6701-6726` | 声明会话类型：名称、图标、欢迎语、能力开关（`supportsFileAttachments` 等）、`when` 条件 |
+> | `vscode.lm.selectChatModels()` | `src/vscode-dts/vscode.d.ts:20770`（**稳定 API**） | 在扩展内挑模型——**可直接选到 eva-ai 的模型** |
+> | `vscode.lm.registerTool(name, tool)` | `vscode.d.ts:20778`（**稳定 API**） | 贡献我们自己的工具（接地检索等） |
+> | `contributes.languageModelTools` | `extensions/copilot/package.json:158` | 声明式注册工具（含 `modelDescription`，给模型看的） |
+>
+> 也就是说：**扩展宿主里完全可以跑自研 loop**（`selectChatModels` 取模型 → `sendRequest` 带工具 → 拿 tool_calls → 调工具 → 回灌 → 循环），
+> 同时白拿会话 UI、模型选择器、工具注册表、附件能力。**核心 fork diff 可以为零。**
+>
+> | | 路线 I（核心 provider） | 路线 II（外挂进程） | **路线 I′（插件扩展）✅** |
+> |---|---|---|---|
+> | 首个可用产出 | 慢 | 中 | **快** |
+> | 核心 fork diff | 大 | 小 | **可为 0** |
+> | 拿到的宿主能力 | 全 | 受 AHP 协议限制 | **够用（经扩展 API 暴露的那部分）** |
+> | 战略自主性 | 最高 | 高 | 高（loop 完全自有） |
+> | 沉没成本风险 | 高 | 中 | **低** |
+>
+> 由于用户已明确「接受 fork diff」，路线 I 的约束被解除；但 **I′ 仍优于 I**——不是因为不能改核心，
+> 而是因为插件形态**天然可复用、可单独发版、可被第三方复刻**，且把 diff 压力留给未来真正需要时才付。
 
 ### 路线 I · 内置第四 Provider（`EvaAgent`）
 
@@ -262,7 +303,10 @@
 | 沉没成本风险 | **高** | 中 | **低** |
 | 对现有三家 agent 的增益 | 无 | 无 | **有（立刻）** |
 
-**推荐：路线 III**，并在第一阶段结束时用明确指标（见 §6）决定是否转向路线 I。
+> **拍板后的收敛**：路线 III 的「渐进」精神被保留，但载体换成 I′——
+> **不做"先增强件、后自研 loop"的二段式等待，而是在插件里同时做**：插件骨架先立起来（哪怕第一版 loop 很朴素），
+> 增强件（接地工具、上下文引擎）作为插件内部模块并行长出来。
+> 理由：I′ 的接入成本已经低到不需要"等"——会话 UI、模型选择器都是白拿的，先立骨架反而更早拿到真实反馈。
 
 ---
 
@@ -388,17 +432,42 @@
 
 ---
 
-## 8. 待你拍板的问题
+## 8. 决策记录（2026-10-15 已拍板）
 
-| # | 问题 | 影响 |
+| # | 问题 | **拍板结果** | 直接推论 |
+|---|---|---|---|
+| Q1 | 目标是"自有可控"还是"用起来最好"？ | **用起来最好的智能体** | 结果导向，不为架构自主性买单。**评测体系（Q6）因此从附属品升格为核心工程**——没有它，"最好"无法证明 |
+| Q2 | 接受 fork diff？自研智能体以什么形态存在？ | **接受 fork diff；以插件形式存在** | 采纳 **路线 I′**（§3）：`extensions/eva-agent` 内置扩展。核心改动按需而非默认——**能不动就不动** |
+| Q3 | 商业侧最看重什么？ | **强大的任务处理能力和质量** | 优先级重排：**D3 接地 > D2 上下文 > Loop 质量 > D5 编排**；D4 合规从"卖点"降为"及格线"（但 Q5 要求的部分仍要做） |
+| Q4 | EVA 模型是什么水平？ | **接入最新版国内大模型：DeepSeek、Qwen** | 模型能力不再是最大短板，但仍需针对性适配（见下表）；**长程工具使用能力必须实测，不能假设** |
+| Q5 | 是否要求内网部署？ | **要求。支持自定义接入本地大模型，或填 Qwen/DeepSeek 的 apikey** | 新增硬需求 **D8：模型来源可配置**（§8.1） |
+| Q6 | 有没有评测？ | **没有，需要我们自己做** | 新增工作线 **W-Eval**，且与开发并行启动（§8.2） |
+| Q7 | 是否保留三家并存？ | **保留 Copilot / Claude / Codex 三家并存** | 我们的 agent 是**并列的第四种会话类型**，不是替代。Copilot 商标按既有决策保留不动 |
+
+### 8.1 Q4 + Q5 的推论：模型层要做的三件事
+
+| 事项 | 说明 | 依托 |
 |---|---|---|
-| Q1 | 目标是"自有可控的智能体"，还是"用起来最好的智能体"？ | 决定路线 I 是否必须 |
-| Q2 | 是否接受 fork diff 面积显著扩大（影响跟上游）？ | 路线 I 的前提 |
-| Q3 | 商业侧最看重什么：成本 / 数据不出内网 / 领域定制 / 品牌自主？ | 决定 D4/D6 的优先级 |
-| Q4 | EVA 模型在长程工具使用上的能力，是否已达到可承载自研 loop 的水平？ | **最关键的前置事实** |
-| Q5 | 是否要求私有化/内网部署场景可用？ | 决定架构是否允许外挂 runtime |
-| Q6 | 有没有可用的真实任务集做 benchmark？ | 决定所有"变好了"的说法能否成立 |
-| Q7 | 是否保留 Copilot / Claude / Codex 三家并存？ | 影响 UI 与默认策略（**注意：Copilot 商标按既有决策保留不动**） |
+| **模型来源可配置** | 至少四种来源：① 内置 EVA 网关（默认）② 自建/内网 EVA 网关 ③ 本地 OpenAI 兼容端点（vLLM / Ollama）④ 直接填 DeepSeek / Qwen 的 apikey | `extensions/eva-ai` 的 `eva-ai.baseUrl` / `eva-ai.serverUrl` 已是可配置形态，可扩展为"模型来源"列表 |
+| **内网/离线可用** | 不能有硬编码的外网依赖；登录、模型清单、更新都要能指向内网 | 需审计 eva-ai 的启动路径，见 §9 新增验证项 V9 |
+| **适配国产模型脾气** | 已知的坑必须继承：`evaChat.ts:9-27` 记录了 EVA 网关三个特性——**200 响应里返回错误**、**tool_calls 分片**、**扁平 `tool_calls` 结构与 wire 不一致**；`evaCliConfig.ts` 记录了 **kimi-k3 拒绝 temperature 参数** | 插件的 loop 层必须自带"参数降级重试"与"工具调用分片合并"，不能假设模型听话 |
+
+> ⚠️ 还要注意 `extension.ts:330-335` 当前硬编码 `imageInput: false`（"网关不暴露元数据，视觉声明会在请求时失败"）。
+> 若 Qwen 最新版支持多模态，需先确认网关能否给出能力标记，否则"截图改 UI"这条线做不了。
+
+### 8.2 Q6 的推论：评测体系是并行工作线，不是收尾工作
+
+因为 Q1 定的是"用起来最好"，**评测必须与开发同时启动**，否则整个项目无法判断方向对错。
+
+| 层级 | 内容 | 建议 |
+|---|---|---|
+| **任务集** | 几十个真实改动任务（来自本仓库自身的历史提交最理想） | 从 `git log` 里挑"有明确意图的改动"，人工写好验收标准 |
+| **判定** | 能否自动判定？ | 优先选"可编译/可测试/可 lint"的任务，让判定自动化；主观任务人工打分 |
+| **指标** | 对齐 §6 的四项 | 完成率、token 消耗、工具轮次、人工介入次数、首改延迟 |
+| **对照** | 必须能横向比 | 同一任务集跑 Copilot / Claude / Codex / 我们的 agent——**Q7 保留三家恰好给了一个天然对照组** |
+| **回归** | 每次改 loop / 提示词 / 工具后跑一遍 | 做成可重复执行的命令，不要靠人记 |
+
+> 这条同时化解了 §7 第 6 条"评估体系缺席"的风险。但它本身是实打实的工作量，应在 P0 就启动。
 
 ---
 
@@ -408,12 +477,18 @@
 |---|---|---|---|
 | V1 | **SDK 是否允许自定义 prompt 组装** | 决定 D2 能否在现有三家上落地，还是必须自研 loop | 查 Copilot/Claude/Codex SDK 是否暴露 prompt 组装钩子；否则看 BYOK 代理层能否改写请求体 |
 | V2 | `ILanguageModelToolsService` 能否被 node 侧（agent host）直接调用 | 决定自研 loop 能否复用现有工具生态 | 查 `common/tools/languageModelToolsService.ts` 的可见性与已有桥接 |
-| V3 | 注册第四个 provider 的最小实现面 | 路线 I 的真实工作量 | 以 `codex/` 与 `copilot/` 为参照，列出必需文件清单 |
-| V4 | EVA 网关是否支持 `imageInput` / 多模态 | 决定"截图改 UI"这条线能否做 | 查 `/api/ai/models/square` 返回的 capability（`evaModels.ts` 现有读取逻辑） |
-| V5 | EVA 模型的长程工具使用能力基线 | Q4 的答案 | 用 P0 任务集实测；对比现有三家 |
-| V6 | `missionControl/` 的成熟度与 `MISSION_CONTROL_PRODUCTION_GAPS.md` 列了哪些缺口 | 决定能否复用为外部控制面 | 读那篇 MD |
-| V7 | Hook 机制能否覆盖"工具执行前/后" | 决定 D4 的审批与审计能否用现成机制实现 | 读 `hookTypes.ts` 的 event 枚举 |
-| V8 | 现有 trace 数据（`eva-ai.trace`）能否支撑上下文画像 | D2 的输入 | 开一次 trace，看字段是否够用 |
+| ~~V1~~ | ~~SDK 是否允许自定义 prompt 组装~~ | **已随路线 I′ 消解** | 我们自己组 prompt，不再受 SDK 约束 |
+| ~~V2~~ | ~~`ILanguageModelToolsService` 能否被 node 侧直接调用~~ | **已随路线 I′ 消解** | 改走 `vscode.lm.registerTool` + `selectChatModels`（扩展宿主内，稳定 API） |
+| ~~V3~~ | ~~注册第四个 provider 的最小实现面~~ | **已随路线 I′ 消解** | 改为：照抄 `extensions/copilot/src/extension/chatSessions/` 的扩展形态 |
+| **V4** | EVA 网关是否支持 `imageInput` / 多模态 | 决定"截图改 UI"这条线能否做 | 查 `/api/ai/models/square` 返回的 capability（`evaModels.ts` 现有读取逻辑） |
+| **V5** | DeepSeek / Qwen 的**长程工具使用**能力基线 | Q4 的答案，且是 loop 设计的输入 | 用评测任务集实测；对比现有三家 |
+| V6 | `missionControl/` 的成熟度与 `MISSION_CONTROL_PRODUCTION_GAPS.md` 列了哪些缺口 | 决定能否复用为外部控制面 | 读那篇 MD（优先级已降，仅当要做外部控制面时） |
+| V7 | Hook 机制能否覆盖"工具执行前/后" | 决定审批/审计能否用现成机制 | 读 `hookTypes.ts` 的 event 枚举 |
+| **V8** | 现有 trace 数据（`eva-ai.trace`）能否支撑上下文画像 | D2 的输入 | 开一次 trace，看字段是否够用 |
+| **V9** | **`enabledApiProposals` 需要哪几项** | 决定插件能否零核心改动启动 | 对照 `extensions/copilot/package.json:138-156`；至少需 `chatSessionsProvider`（其余按需） |
+| **V10** | **内网/离线场景下的硬编码外网依赖** | Q5 的硬要求 | 审计 eva-ai 启动路径：`serverUrl` 默认值 `http://localhost:8080`（已是本地形态，✅）、登录走 OAuth2 PKCE 能否指向内网 IAM、SDK 下载器（`agentSdkDownloader.ts`）在离线时是否会卡住 |
+| **V11** | **第三方/本地模型端点的能力差异** | Q5 要求可接本地模型，但本地模型的工具调用/流式行为可能与 EVA 网关不同 | 抽象一层"模型适配器"，把 `evaChat.ts` 里已知的网关脾气做成可插拔策略 |
+| **V12** | **评测任务集从哪来** | Q6 要求自建评测 | 优先用本仓库 `git log` 里"意图明确 + 可编译验证"的历史提交；评估 `src/vs/platform/agentHost/test/` 下的 yaml 仿真框架能否复用为回归 runner |
 
 ---
 
