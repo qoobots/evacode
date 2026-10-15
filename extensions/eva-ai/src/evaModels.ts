@@ -112,8 +112,13 @@ const BYOK_OUTPUT_LIMITS: Readonly<Record<string, Readonly<Record<string, number
 	},
 };
 
-/** Normalises an endpoint for {@link BYOK_OUTPUT_LIMITS} lookups. */
-function endpointKey(baseUrl: string): string {
+/**
+ * Normalises an endpoint for the per-endpoint lookups (limits, vision).
+ *
+ * Trailing slashes are stripped because a configured address with one and the same address without
+ * are the same endpoint, and a settings file freely grows them.
+ */
+export function endpointKey(baseUrl: string): string {
 	return baseUrl.trim().replace(/\/+$/, '');
 }
 

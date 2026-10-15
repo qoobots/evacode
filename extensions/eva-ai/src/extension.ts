@@ -9,6 +9,7 @@ import { EvaAuthenticationProvider } from './evaAuthProvider';
 import { readConfig, type EvaConfig } from './evaConfig';
 import { streamChat, type EvaUsage } from './evaChat';
 import { AUTO_MODEL_ID, describeModel, fetchModels, isChatModelId, limitsFor, limitsForEndpoint, orderModels, type EvaModelCatalog } from './evaModels';
+import { resolveAdapter } from './evaAdapters';
 import { ApiKeyResolver, EVA_VENDOR, readModelSources, type ModelSource } from './modelSources';
 import { EvaLocalProxy } from './evaProxy';
 import { readTraceConfig, setTraceDirectory, setTraceLogger } from './evaTrace';
@@ -76,6 +77,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 		apiKeyEnv: undefined,
 		staticApiKey: undefined,
 		models: [],
+		vision: undefined,
 	};
 
 	const provider = new EvaLanguageModelChatProvider(evaSource, keys, auth, readConfig);
@@ -442,6 +444,7 @@ class EvaLanguageModelChatProvider implements vscode.LanguageModelChatProvider, 
 
 		// No Auto entry here: only the EVA gateway tells us what its own default is, and inventing a
 		// "let us pick" entry for a source we know nothing else about would be a guess.
+		const adapter = resolveAdapter(source.baseUrl, source.vision);
 		const ordered = orderModels(ids.filter(isChatModelId), '', undefined);
 		const models: vscode.LanguageModelChatInformation[] = ordered.map(id => {
 			const description = describeModel(id);
@@ -456,10 +459,10 @@ class EvaLanguageModelChatProvider implements vscode.LanguageModelChatProvider, 
 				maxInputTokens: limits.maxInputTokens,
 				maxOutputTokens: limits.maxOutputTokens,
 				capabilities: {
-					// Vision is claimed for no BYOK model: none of these endpoints publish per-model
-					// capabilities, and a vision claim that fails at request time looks like a broken
-					// extension. Declare it per model once an endpoint can be asked.
-					imageInput: false,
+					// Only models measured to accept images claim it. A false claim fails at
+					// request time and reads as a broken extension; a model served locally can
+					// declare it through its source's `vision` setting.
+					imageInput: adapter.supportsImages(id),
 					toolCalling: true,
 				},
 				isBYOK: true,
@@ -612,6 +615,7 @@ class EvaLanguageModelChatProvider implements vscode.LanguageModelChatProvider, 
 		// The EVA address stays configurable per request; every other source uses the one it was
 		// configured with, which is the whole point of declaring it.
 		const baseUrl = this.source.auth === 'oauth' ? config.aiBaseUrl : this.source.baseUrl;
+		const adapter = resolveAdapter(baseUrl, this.source.vision);
 
 		const controller = new AbortController();
 		const listener = token.onCancellationRequested(() => controller.abort());
@@ -630,6 +634,7 @@ class EvaLanguageModelChatProvider implements vscode.LanguageModelChatProvider, 
 				// ("Range of max_tokens should be [1, N]").
 				maxOutputTokens: limitsForEndpoint(baseUrl, targetId, config).maxOutputTokens,
 				signal: controller.signal,
+				adapter,
 				handlers: {
 					onText: text => progress.report(new vscode.LanguageModelTextPart(text)),
 					onThinking: text => progress.report(new vscode.LanguageModelThinkingPart(text)),

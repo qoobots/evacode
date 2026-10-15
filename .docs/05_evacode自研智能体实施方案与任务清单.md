@@ -232,10 +232,10 @@ extensions/eva-agent/
 | ✅ 非对话模型过滤 | 百炼会返回 `wan*`、`qwen-audio*`、`decision-model-preview`，已在 `isChatModelId` 过滤（17 个→11 个） |
 | ✅ 无 Key 不报错 | 来源仍会注册，只是不出模型，方便后续配置；只有真正调用时才要求 Key |
 
-| 未完成 | 说明 |
+| 已完成（本轮补齐） | 说明 |
 |---|---|
-| ⬜ 模型适配器 | 各家脾气尚未抽成可插拔策略：`evaChat.ts` 的 EVA 三坑（200 里返回错误、tool_calls 分片、扁平结构与 wire 不一致）、`evaCliConfig.ts` 的 kimi-k3 拒绝 temperature、思考链字段归一 |
-| ⬜ 多模态 | 仍全部声明 `imageInput: false`——端点不暴露能力元数据，**不臆测**。待 P0-0.4b 确认 |
+| ✅ 模型适配器抽象 | `extensions/eva-ai/src/evaAdapters.ts`。把"不属于 OpenAI 兼容契约的差异"抽成策略：思考链字段名、可降级参数、视觉能力。参数降级从两处硬编码（`temperature` / `stream_options`）泛化为**声明式列表**，下次遇到新的拒绝项只需加一行 |
+| ✅ 多模态 | 不再一律 `false`：按**实测**逐模型声明，并真正把图片以 `image_url` data URL 发出去（此前 `LanguageModelDataPart` 直接丢弃）。本地模型可用来源的 `vision` 设置显式声明 |
 
 ### 4.1 实测到的真实配额（2026-10-15，用本机 apikey 探测）
 
@@ -260,6 +260,27 @@ extensions/eva-agent/
 
 代码位置：`evaModels.ts` 的 `BYOK_OUTPUT_LIMITS`（按端点）与 `MEASURED_LIMITS`（按 eva-ai 实测）；
 `limitsForEndpoint` 先查端点，再查 eva-ai 实测，最后才是配置兜底。
+
+### 4.2 实测到的真实视觉能力（2026-10-15）
+
+方法：发一张 16×16 纯红 PNG，问它 RGB。**看得见的会答 `(255,0,0)`，看不见的会答 `NO_VISION`。**
+同一个模型重复两次取一致结果。
+
+| 端点 | ✅ 支持图片 | ❌ 仅文本 |
+|---|---|---|
+| DeepSeek 官方 | `deepseek-flash` | `deepseek-v4-pro` |
+| 百炼 Token Plan | `qwen3.8-max`、`qwen3.8-flash`、`qwen3.7-plus`、`qwen3.6-flash`、`deepseek-v4.1-flash`、`auto` | `qwen3.7-max`、`glm-5.2`、`glm-5.3`、`deepseek-v4-pro`、`deepseek-v4-flash-0731` |
+
+**两个会让结论完全反过来的陷阱**（都已踩到，写在 `evaAdapters.ts` 注释里）：
+
+1. **问得太省会误判成"看不见"。** `max_tokens: 48` 时推理模型把预算全花在思考上，答案为空，
+   看起来和"不支持图片"一模一样。`deepseek-flash` 在 48 时判成不支持，400 时准确答出 `(255,0,0)`。
+2. **"接受"不等于"看得见"，"拒绝"也可能恰恰证明它看得见。** DeepSeek 收下 1×1 图后说看不见；
+   而百炼**拒绝**了同一张图，理由是"宽高必须大于 10"——这个拒绝反而证明它会去解析图片。
+
+所以表里每一项都是**模型的实际回答**，不是"请求有没有被接受"。
+
+> 注意 `qwen3.7-plus` 支持而 `qwen3.7-max` 不支持：**视觉能力不随模型家族走**，无法从名字推断。
 
 ---
 
@@ -419,10 +440,16 @@ extensions/eva-agent/
       DeepSeek 与百炼已作为默认来源内置，用本机环境变量即可直接用
 - [x] 5.3b 顺带完成的三件事 ✅ —— ① `stream_options` 不支持时降级重试（本地端点必需）
       ② 非对话模型过滤 ③ 限额按端点实测（见 §4.1）
-- [ ] 5.2 模型适配器抽象（EVA / 通用 OpenAI 兼容）❌ —— 各家脾气仍是散落在 `evaChat.ts` 里的分支，未抽成策略
-- [ ] 5.4 参数降级重试与思考链归一 ❌ —— `temperature` 降级已有；思考链字段归一已有
-      （`evaChat.ts` 接受 `reasoning_content`/`reasoning`/`reasoning_text`），但**未做成可插拔策略**
+- [x] 5.2 模型适配器抽象 ✅ —— `eva-ai/src/evaAdapters.ts`，按端点解析：思考链字段名、可降级参数、视觉能力。
+      `evaChat.ts` 只保留"契约内"的通用逻辑（200 里返回错误、tool_calls 分片、扁平↔wire 转换）
+- [x] 5.4 参数降级重试与思考链归一 ✅ —— 降级从两处硬编码泛化为**声明式列表**（`DroppableParam`），
+      且**不会重复丢弃**同一参数（丢弃过的不再参与匹配，避免双参数报错时死循环）；
+      思考链字段由适配器的 `thinkingFields` 决定
+- [x] 5.6 多模态真正打通 ✅ —— 不只是声明能力：`toWireMessages` 现在把 `LanguageModelDataPart`
+      转成 `image_url` data URL 真实发出（此前是直接丢弃），且**只在模型确实支持时才发**
+      （否则 `qwen3.7-max` 这类会直接 400）
 - [ ] 5.5 验收：**断外网**后仍能完成一次完整改动 ❌ **阻塞：需打包后实机运行**
+- [ ] 5.7 真机验收多模态 ❌ **阻塞：需在 Chat 视图里附一张图，确认视觉模型收到并理解**
 
 ### 阶段 6：打磨与可选编排（P6）
 

@@ -35,6 +35,13 @@ export interface ModelSource {
 	readonly staticApiKey: string | undefined;
 	/** Allow list. Empty means discover from `<baseUrl>/models`. */
 	readonly models: readonly string[];
+	/**
+	 * Whether models here take images, overriding the measured table.
+	 *
+	 * Needed because a model served locally is in none of our tables, and whoever points us at it is
+	 * the only one who can say. Left undefined, only the models we actually measured claim vision.
+	 */
+	readonly vision: boolean | undefined;
 }
 
 /** Key under which a source's key is kept in `SecretStorage`. */
@@ -101,6 +108,7 @@ interface RawSource {
 	readonly apiKey?: unknown;
 	readonly apiKeyEnv?: unknown;
 	readonly models?: unknown;
+	readonly vision?: unknown;
 }
 
 /**
@@ -138,6 +146,7 @@ export function readModelSources(): ModelSource[] {
 			models: (Array.isArray(entry?.models) ? entry.models as unknown[] : [])
 				.map(value => str(value).trim())
 				.filter(Boolean),
+			vision: typeof entry?.vision === 'boolean' ? entry.vision : undefined,
 		});
 	}
 	return sources;
