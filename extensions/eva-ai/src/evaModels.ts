@@ -81,10 +81,55 @@ const MEASURED_LIMITS: Readonly<Record<string, MeasuredLimits>> = {
 };
 
 /**
- * Limits for a model: the measured ones when we have them, the configured fallback otherwise.
+ * Output ceilings measured against each vendor's **own** endpoint, not against eva-ai.
  *
- * The fallback exists for models the platform adds later; it is deliberately not silently applied
+ * Keyed by endpoint rather than by model id, because the same id does not mean the same model on two
+ * endpoints: `deepseek-v4-pro` answers DeepSeek's own API with `max_tokens` capped at 393216, while
+ * the Alibaba Token Plan endpoint accepted `max_tokens: 999999999` for it and replied for real. A
+ * table keyed by id alone would have to pick one of those and be wrong on the other.
+ *
+ * Why only output ceilings: reading one is cheap and safe - an out-of-range `max_tokens` is rejected
+ * before the model runs, and the rejection quotes the interval it allows - whereas reading an *input*
+ * ceiling requires a payload larger than the model's entire context. So input limits for these
+ * endpoints remain the configured fallback, which is why `limitsForEndpoint` keeps the fallback for
+ * input while using the measured output. Absence from the table means "not measured", not "no limit".
+ */
+const BYOK_OUTPUT_LIMITS: Readonly<Record<string, Readonly<Record<string, number>>>> = {
+	//   max_tokens: 999999999 -> "Invalid max_tokens value, the valid range of max_tokens is [1, 393216]"
+	'https://api.deepseek.com': {
+		'deepseek-v4-pro': 393_216,
+		'deepseek-flash': 393_216,
+	},
+	//   max_tokens: 999999999 -> "Range of max_tokens should be [1, 131072]"
+	//   (qwen3.6-flash is the outlier at [1, 65536])
+	'https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1': {
+		'qwen3.8-max': 131_072,
+		'qwen3.8-flash': 131_072,
+		'qwen3.7-max': 131_072,
+		'qwen3.7-plus': 131_072,
+		'qwen3.6-flash': 65_536,
+		'glm-5.3': 131_072,
+	},
+};
+
+/** Normalises an endpoint for {@link BYOK_OUTPUT_LIMITS} lookups. */
+function endpointKey(baseUrl: string): string {
+	return baseUrl.trim().replace(/\/+$/, '');
+}
+
+/**
+ * Limits for a model on a given endpoint: a measurement for that endpoint first, then a measurement
+ * made against eva-ai, then the configured fallback.
+ *
+ * The fallback exists for models and endpoints added later; it is deliberately not silently applied
  * to models we did measure, because a wrong context window is what makes the chat truncate early or
+ * send a request the service then rejects.
+ */
+/**
+ * Limits measured against eva-ai itself, or the configured fallback.
+ *
+ * The fallback exists for models the platform adds later; it is deliberately not silently applied to
+ * models we did measure, because a wrong context window is what makes the chat truncate early or
  * send a request the service then rejects.
  */
 export function limitsFor(id: string, fallback: EvaModelLimits): EvaModelLimits {
@@ -96,6 +141,17 @@ export function limitsFor(id: string, fallback: EvaModelLimits): EvaModelLimits 
 		maxInputTokens: measured.maxInputTokens,
 		maxOutputTokens: measured.maxOutputTokens ?? fallback.maxOutputTokens,
 	};
+}
+
+export function limitsForEndpoint(baseUrl: string, id: string, fallback: EvaModelLimits): EvaModelLimits {
+	const byok = BYOK_OUTPUT_LIMITS[endpointKey(baseUrl)]?.[id];
+	if (byok !== undefined) {
+		return {
+			maxInputTokens: fallback.maxInputTokens,
+			maxOutputTokens: byok,
+		};
+	}
+	return limitsFor(id, fallback);
 }
 
 /** True when the limit was measured from eva-ai rather than taken from settings. */
@@ -113,17 +169,19 @@ export async function fetchModels(baseUrl: string, token: string): Promise<EvaMo
 	try {
 		response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
 	} catch (err) {
-		throw new Error(`连不上 EVA AI 网关（${url}）：${err instanceof Error ? err.message : String(err)}`);
+		// Wording stays endpoint-neutral: this is used for the EVA gateway and for BYOK endpoints
+		// alike, and naming the wrong one sends people looking in the wrong place.
+		throw new Error(`连不上模型端点（${url}）：${err instanceof Error ? err.message : String(err)}`);
 	}
 	if (!response.ok) {
-		throw new Error(`EVA AI 网关返回 HTTP ${response.status}${response.status === 401 || response.status === 403 ? '（登录态已失效，请重新登录）' : ''}`);
+		throw new Error(`模型端点返回 HTTP ${response.status}${response.status === 401 || response.status === 403 ? '（Key 无效或已失效）' : ''}`);
 	}
 	const text = await response.text();
 	let body: { data?: unknown; models?: unknown; default?: unknown } = {};
 	try {
 		body = text ? JSON.parse(text) : {};
 	} catch (err) {
-		throw new Error(`EVA AI 网关返回的模型清单无法解析：${err instanceof Error ? err.message : String(err)}`);
+		throw new Error(`模型端点返回的模型清单无法解析：${err instanceof Error ? err.message : String(err)}`);
 	}
 	const raw = Array.isArray(body.data) ? body.data as ApiModelRaw[] : Array.isArray(body.models) ? body.models as ApiModelRaw[] : [];
 	const ids: string[] = [];
@@ -163,11 +221,32 @@ const KNOWN_MODELS: Readonly<Record<string, { name: string; detail?: string }>> 
 	'qwen3.8-flash': { name: 'Qwen3.8 Flash', detail: '通义千问 3.8 · 极速' },
 	'qwen3-coder-plus': { name: 'Qwen3 Coder Plus', detail: '通义千问 3 · 编码' },
 	'deepseek-v3': { name: 'DeepSeek V3', detail: '深度求索 · 通用' },
-	'deepseek-v4-pro-0813': { name: 'DeepSeek V4 Pro', detail: '深度求索 V4 · 强推理' },
+	'deepseek-v4-pro': { name: 'DeepSeek V4 Pro', detail: '深度求索 V4 · 强推理' },
+	'deepseek-flash': { name: 'DeepSeek Flash', detail: '深度求索 · 快速' },
+	'deepseek-v4-flash-0731': { name: 'DeepSeek V4 Flash', detail: '深度求索 V4 · 快速' },
+	'deepseek-v4-pro-0813': { name: 'DeepSeek V4 Pro (0813)', detail: '深度求索 V4 · 强推理' },
 	'deepseek-v4.1-flash': { name: 'DeepSeek V4.1 Flash', detail: '深度求索 V4 · 快速' },
+	'qwen3.6-flash': { name: 'Qwen3.6 Flash', detail: '通义千问 3.6 · 极速' },
 	'kimi-k3': { name: 'Kimi K3', detail: '月之暗面 · 长上下文' },
 	'glm-5.2': { name: 'GLM 5.2', detail: '智谱 · 通用' },
+	'glm-5.3': { name: 'GLM 5.3', detail: '智谱 · 通用' },
 };
+
+/**
+ * Model families that are not chat models, filtered out of `/models` listings.
+ *
+ * A BYOK endpoint's model list is not curated for us: the Alibaba Token Plan one also serves image,
+ * video and audio models (`wan*`, `qwen-audio-*`), plus an internal `decision-model-preview`. Those
+ * would appear in the picker and then fail at request time, which reads as a broken extension rather
+ * than as an inapplicable model. The list is deliberately matched on prefixes, since vendors add
+ * numbered variants rather than new families.
+ */
+const NON_CHAT_PREFIXES = ['wan', 'qwen-audio', 'qwen-vl-o', 'decision-model'] as const;
+
+export function isChatModelId(id: string): boolean {
+	const lower = id.trim().toLowerCase();
+	return lower.length > 0 && !NON_CHAT_PREFIXES.some(prefix => lower.startsWith(prefix));
+}
 
 export function describeModel(id: string): EvaModelDescription {
 	const known = KNOWN_MODELS[id];

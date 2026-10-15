@@ -212,24 +212,54 @@ extensions/eva-agent/
 
 ---
 
-## 4. D8：模型来源可配置（Q5，发布阻塞项）
+## 4. D8：模型来源可配置（Q5，发布阻塞项）— ✅ 已落地
 
-| 来源 | 形态 |
+| 来源 | 形态 | 状态 |
+|---|---|---|
+| ① 内置 EVA 网关（默认） | 沿用 `eva-ai.baseUrl`，OAuth 登录 | ✅ 原有 |
+| ② 内网自建网关 | 同上改 URL | ✅ 原有 |
+| ③ 本地模型服务 | OpenAI 兼容端点（vLLM / Ollama / LM Studio） | ✅ 本次新增 |
+| ④ 直连厂商 | 填 DeepSeek / Qwen 的 apikey + 端点 | ✅ 本次新增 |
+
+实现：`extensions/eva-ai/src/modelSources.ts` 负责来源抽象与密钥解析；
+每个来源注册一个**独立 vendor** 的 `LanguageModelChatProvider`，因此在模型选择器里各自成组。
+
+| 已完成 | 说明 |
 |---|---|
-| ① 内置 EVA 网关（默认） | 沿用 `eva-ai.baseUrl` |
-| ② 内网自建网关 | 同上改 URL |
-| ③ 本地模型服务 | OpenAI 兼容端点（vLLM / Ollama / LM Studio） |
-| ④ 直连厂商 | 填 DeepSeek / Qwen 的 apikey + 端点 |
+| ✅ 统一配置 | `eva-ai.byok.sources` 数组 `{id, label, baseUrl, apiKeyEnv｜apiKey, models}`，**默认即带 DeepSeek 与百炼两个来源** |
+| ✅ 密钥三级回退 | **Secret Storage > 环境变量 > 设置项（明文）**。默认走环境变量（`deepseek-api-key`、`TokenPlan-API-KEY`）；命令「Eva AI: 设置 API Key」写入 Secret Storage |
+| ✅ 自建端点更宽容 | `stream_options` 不被支持时自动降级重试——vLLM / Ollama 这类常不支持，否则整个端点不可用 |
+| ✅ 非对话模型过滤 | 百炼会返回 `wan*`、`qwen-audio*`、`decision-model-preview`，已在 `isChatModelId` 过滤（17 个→11 个） |
+| ✅ 无 Key 不报错 | 来源仍会注册，只是不出模型，方便后续配置；只有真正调用时才要求 Key |
 
-要点：
-1. 统一为 `eva-agent.modelSources` 数组：`{ id, 显示名, baseUrl, apiKey来源, 协议 }`
-2. **apiKey 走 Secret Storage**，不落盘（参照 `extensions/copilot/src/extension/byok/vscode-node/byokStorageService.ts`）
-3. **模型适配器**：把各家脾气做成可插拔策略，至少覆盖
-   - `evaChat.ts:9-27` 记录的 EVA 网关三坑：**200 响应里返回错误**、**tool_calls 分片**、**扁平 tool_calls 与 wire 不一致**
-   - `evaCliConfig.ts`：**kimi-k3 拒绝 temperature** → 参数降级重试
-   - 各家思考链字段差异（`reasoning_content` vs `thinking`）
-4. **离线不卡启动**：`src/vs/platform/agentHost/node/agentSdkDownloader.ts` 需审计
-5. `extension.ts:330-335` 当前硬编码 `imageInput: false`；多模态待网关确认（P0-0.4）
+| 未完成 | 说明 |
+|---|---|
+| ⬜ 模型适配器 | 各家脾气尚未抽成可插拔策略：`evaChat.ts` 的 EVA 三坑（200 里返回错误、tool_calls 分片、扁平结构与 wire 不一致）、`evaCliConfig.ts` 的 kimi-k3 拒绝 temperature、思考链字段归一 |
+| ⬜ 多模态 | 仍全部声明 `imageInput: false`——端点不暴露能力元数据，**不臆测**。待 P0-0.4b 确认 |
+
+### 4.1 实测到的真实配额（2026-10-15，用本机 apikey 探测）
+
+方法：发一个 `max_tokens: 999999999` 的请求，被拒时错误信息会回读允许区间
+（**被拒的请求模型不运行，因此不计费**）。输入上限未测——那需要超过模型整个上下文的载荷。
+
+| 端点 | 模型 | `max_tokens` 上限 |
+|---|---|---|
+| DeepSeek 官方 `api.deepseek.com` | `deepseek-v4-pro`、`deepseek-flash` | **393216** |
+| 百炼 Token Plan | `qwen3.8-max`、`qwen3.8-flash`、`qwen3.7-max`、`qwen3.7-plus`、`glm-5.3` | **131072** |
+| 百炼 Token Plan | `qwen3.6-flash` | **65536** |
+| 百炼 Token Plan | `deepseek-*`、`auto` | 服务端不限制 → 用兜底值 8192 |
+
+**两个关键实测结论：**
+
+1. **百炼 Token Plan 必须用专属端点**
+   `https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1`。
+   通用 `dashscope.aliyuncs.com` 对 `sk-sp-` 前缀的 Key 一律 **401**——两者不能混用。
+2. **同一个模型 id 在两个端点上限不同**
+   `deepseek-v4-pro` 在 DeepSeek 官方是 393216，在百炼侧则完全不限制。
+   所以限额表**按端点组织**（`limitsForEndpoint`），按 id 查表必然会错一个。
+
+代码位置：`evaModels.ts` 的 `BYOK_OUTPUT_LIMITS`（按端点）与 `MEASURED_LIMITS`（按 eva-ai 实测）；
+`limitsForEndpoint` 先查端点，再查 eva-ai 实测，最后才是配置兜底。
 
 ---
 
@@ -383,11 +413,16 @@ extensions/eva-agent/
 
 ### 阶段 5：模型来源可配置（P5，发布阻塞）
 
-- [ ] 5.1 `eva-agent.modelSources` 配置结构 + Secret Storage ❌
-- [ ] 5.2 模型适配器抽象（EVA / 通用 OpenAI 兼容）❌
-- [ ] 5.3 支持四种来源 ❌
-- [ ] 5.4 参数降级重试与思考链归一 ❌
-- [ ] 5.5 验收：**断外网**后仍能完成一次完整改动 ❌
+- [x] 5.1 来源配置结构 + Secret Storage ✅ —— 落在 `eva-ai.byok.sources`（而非原计划的 `eva-agent.modelSources`，
+      因为**模型层在 eva-ai 扩展里**，自研 agent 只是消费方）；密钥三级回退：Secret Storage > 环境变量 > 设置项
+- [x] 5.3 支持四种来源 ✅ —— EVA 网关 / 内网自建 / 本地 OpenAI 兼容端点 / 厂商官方 apikey。
+      DeepSeek 与百炼已作为默认来源内置，用本机环境变量即可直接用
+- [x] 5.3b 顺带完成的三件事 ✅ —— ① `stream_options` 不支持时降级重试（本地端点必需）
+      ② 非对话模型过滤 ③ 限额按端点实测（见 §4.1）
+- [ ] 5.2 模型适配器抽象（EVA / 通用 OpenAI 兼容）❌ —— 各家脾气仍是散落在 `evaChat.ts` 里的分支，未抽成策略
+- [ ] 5.4 参数降级重试与思考链归一 ❌ —— `temperature` 降级已有；思考链字段归一已有
+      （`evaChat.ts` 接受 `reasoning_content`/`reasoning`/`reasoning_text`），但**未做成可插拔策略**
+- [ ] 5.5 验收：**断外网**后仍能完成一次完整改动 ❌ **阻塞：需打包后实机运行**
 
 ### 阶段 6：打磨与可选编排（P6）
 

@@ -46,10 +46,17 @@
 					"default": 24,
 					"description": "Safety cap on how many model round-trips one request may take. The loop stops and reports when it is reached."
 				},
-				"eva-agent.modelVendor": {
-					"type": "string",
-					"default": "eva-ai",
-					"description": "Vendor whose models the agent loop runs on. The default is the EVA gateway published by the Eva AI extension."
+				"eva-agent.modelVendors": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"default": [
+						"eva-ai",
+						"eva-deepseek",
+						"eva-qwen"
+					],
+					"description": "按优先级依次尝试的模型 vendor，第一个能选出模型的即被使用。`eva-ai` 是 EVA 网关；在 Eva AI 扩展的 `eva-ai.byok.sources` 里新增的来源，把它的 id 填在这里即可让自研智能体直接使用。"
 				}
 			}
 		}

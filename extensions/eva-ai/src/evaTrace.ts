@@ -35,7 +35,14 @@ import * as vscode from 'vscode';
  * Off unless `eva-ai.trace.enabled` is set: the log holds the user's source code verbatim.
  */
 
-export type EvaTraceSource = 'copilot' | 'claude-code' | 'codex' | 'openai';
+/**
+ * Which caller produced a record, used in the file name.
+ *
+ * The four named values are the known routes; the open-ended member is what lets a BYOK model source
+ * be recorded under its own id instead of being flattened into one of them - a source configured in
+ * settings has no predetermined name.
+ */
+export type EvaTraceSource = 'copilot' | 'claude-code' | 'codex' | 'openai' | (string & {});
 
 export interface EvaTraceConfig {
 	readonly enabled: boolean;
@@ -373,7 +380,9 @@ function cap(text: string, max: number): string {
 /** Sortable by time, and unique per record: the serial is what keeps same-millisecond writes apart. */
 function fileName(now: Date, source: string, serial: number): string {
 	const time = `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-	return `${time}-${String(now.getMilliseconds()).padStart(3, '0')}-${source}-${String(serial).padStart(3, '0')}`;
+	// A source id can now come from settings, so it is not guaranteed to be a safe file name.
+	const safe = source.replace(/[^A-Za-z0-9._-]/g, '_') || 'unknown';
+	return `${time}-${String(now.getMilliseconds()).padStart(3, '0')}-${safe}-${String(serial).padStart(3, '0')}`;
 }
 
 function pad(value: number): string {

@@ -49,19 +49,39 @@
 				"command": "eva-ai.applyToCodex",
 				"title": "Eva AI: 应用到 Codex"
 			},
-		{
-			"command": "eva-ai.restoreCliConfig",
-			"title": "Eva AI: 还原 CLI 配置"
-		},
-		{
-			"command": "eva-ai.openTraceFolder",
-			"title": "Eva AI: 打开交互日志目录"
-		}
-	],
+			{
+				"command": "eva-ai.restoreCliConfig",
+				"title": "Eva AI: 还原 CLI 配置"
+			},
+			{
+				"command": "eva-ai.openTraceFolder",
+				"title": "Eva AI: 打开交互日志目录"
+			},
+			{
+				"command": "eva-ai.setApiKey",
+				"title": "Eva AI: 设置 API Key"
+			},
+			{
+				"command": "eva-ai.clearApiKey",
+				"title": "Eva AI: 清除已保存的 API Key"
+			},
+			{
+				"command": "eva-ai.showModelSources",
+				"title": "Eva AI: 查看模型来源状态"
+			}
+		],
 		"languageModelChatProviders": [
 			{
 				"vendor": "eva-ai",
 				"displayName": "Eva AI"
+			},
+			{
+				"vendor": "eva-deepseek",
+				"displayName": "DeepSeek"
+			},
+			{
+				"vendor": "eva-qwen",
+				"displayName": "阿里云百炼"
 			}
 		],
 		"configuration": {
@@ -109,6 +129,62 @@
 					"type": "number",
 					"default": 8192,
 					"description": "仅用于「未实测」模型或服务端不校验输出上限的模型的兜底值。已知模型一律使用从 EVA 实测到的真实值。"
+				},
+				"eva-ai.byok.sources": {
+					"type": "array",
+					"default": [
+						{
+							"id": "eva-deepseek",
+							"label": "DeepSeek",
+							"baseUrl": "https://api.deepseek.com",
+							"apiKeyEnv": "deepseek-api-key",
+							"models": []
+						},
+						{
+							"id": "eva-qwen",
+							"label": "阿里云百炼 · Token Plan",
+							"baseUrl": "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+							"apiKeyEnv": "TokenPlan-API-KEY",
+							"models": []
+						}
+					],
+					"items": {
+						"type": "object",
+						"required": [
+							"id",
+							"baseUrl"
+						],
+						"properties": {
+							"id": {
+								"type": "string",
+								"description": "来源标识，同时作为 vendor 出现在模型选择器里。不要带空格。改动它等于换了一个来源。"
+							},
+							"label": {
+								"type": "string",
+								"description": "显示名称。"
+							},
+							"baseUrl": {
+								"type": "string",
+								"description": "OpenAI 兼容的根地址，会自动拼接 /models 与 /chat/completions。本地部署（vLLM、Ollama、LM Studio 等）填 http://localhost:端口/v1 这样的地址即可。"
+							},
+							"apiKeyEnv": {
+								"type": "string",
+								"description": "读取 Key 的环境变量名。推荐用它，密钥不会落进 settings.json。注意：新增或修改环境变量后需要重启 Evacode 才会生效。"
+							},
+							"apiKey": {
+								"type": "string",
+								"description": "直接写 Key。**明文存进 settings.json**，仅在没有环境变量可用时使用；更安全的做法是用「Eva AI: 设置 API Key」写入安全存储。"
+							},
+							"models": {
+								"type": "array",
+								"items": {
+									"type": "string"
+								},
+								"description": "只暴露这些模型，且不再调用远端的 /models。自建端点如果不实现 /models，就在这里把它提供的模型列出来。留空表示自动发现。"
+							}
+						}
+					},
+					"description": "除 EVA 网关以外的模型来源：厂商官方端点（用 apikey）或本地/自建的 OpenAI 兼容端点。Key 的优先级为：安全存储 > 环境变量 > 此处的 apiKey。没有可用 Key 的来源不会报错，只是不出现在模型列表里。"
 				},
 				"eva-ai.trace.enabled": {
 					"type": "boolean",

@@ -30,7 +30,8 @@ export async function runTurn(turn: TurnRequest): Promise<void> {
 	const model = await resolveModel();
 	if (!model) {
 		stream.markdown(
-			'没有可用的模型。请确认已经登录 Eva AI（`Eva AI: 登录`），或把 `eva-agent.modelVendor` 指向一个已注册的 vendor。'
+			'没有可用的模型。请确认已经登录 Eva AI（`Eva AI: 登录`），或已在 `eva-ai.byok.sources` 里配好某个来源的 API Key；' +
+			'并把该来源的 id 加进 `eva-agent.modelVendors`。'
 		);
 		return;
 	}
@@ -95,8 +96,21 @@ function collectTools(): vscode.LanguageModelChatTool[] {
 	}));
 }
 
+/**
+ * Picks a model, walking the configured vendors in order.
+ *
+ * A list rather than a single vendor because which source has a usable credential is not knowable
+ * ahead of time: the EVA gateway needs a login, a BYOK source needs its key, and a machine may well
+ * have one but not the other. Taking the first vendor that yields anything is what lets the agent
+ * work in a setup where only a BYOK endpoint is configured.
+ */
 async function resolveModel(): Promise<vscode.LanguageModelChat | undefined> {
-	const vendor = vscode.workspace.getConfiguration('eva-agent').get<string>('modelVendor') ?? 'eva-ai';
-	const models = await vscode.lm.selectChatModels({ vendor });
-	return models[0];
+	const vendors = vscode.workspace.getConfiguration('eva-agent').get<string[]>('modelVendors') ?? ['eva-ai'];
+	for (const vendor of vendors) {
+		const models = await vscode.lm.selectChatModels({ vendor });
+		if (models.length) {
+			return models[0];
+		}
+	}
+	return undefined;
 }

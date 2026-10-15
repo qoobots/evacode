@@ -49,6 +49,8 @@ export interface EvaStreamHandlers {
 export interface EvaChatRequest {
 	readonly baseUrl: string;
 	readonly token: string;
+	/** Which model source this goes to, so a trace can be attributed when several are configured. */
+	readonly source?: string;
 	readonly model: string;
 	readonly messages: readonly vscode.LanguageModelChatRequestMessage[];
 	readonly tools: readonly vscode.LanguageModelChatTool[] | undefined;
@@ -75,22 +77,49 @@ export interface WireMessage {
 /** Marks a parameter rejected by the upstream model, to retry once without it. */
 class RetryWithoutTemperature extends Error { }
 
+/**
+ * Marks an endpoint that does not understand `stream_options`.
+ *
+ * The EVA gateway needs it to report token counts, but it is not a universal part of the
+ * OpenAI-compatible contract: self-hosted servers (vLLM, Ollama and friends) reject it outright.
+ * Those endpoints are exactly the "point this at a model I run myself" case, so the response is to
+ * retry without it rather than to declare the endpoint unusable - we lose the real token counts and
+ * fall back to estimating them, which is a smaller loss than no endpoint at all.
+ */
+class RetryWithoutStreamOptions extends Error { }
+
+/**
+ * Sends the request, shedding optional parameters the endpoint turns out not to support.
+ *
+ * Both retries are bounded by construction: each flag can only go from set to unset, so this
+ * terminates after at most three attempts even if an endpoint rejects both.
+ */
 export async function streamChat(request: EvaChatRequest): Promise<void> {
-	try {
-		await runOnce(request, request.temperature);
-	} catch (err) {
-		if (err instanceof RetryWithoutTemperature) {
-			await runOnce(request, undefined);
+	let temperature = request.temperature;
+	let includeUsage = true;
+
+	for (; ;) {
+		try {
+			await runOnce(request, temperature, includeUsage);
 			return;
+		} catch (err) {
+			if (err instanceof RetryWithoutTemperature && temperature !== undefined) {
+				temperature = undefined;
+				continue;
+			}
+			if (err instanceof RetryWithoutStreamOptions && includeUsage) {
+				includeUsage = false;
+				continue;
+			}
+			if (isAbort(err, request.signal)) {
+				return;
+			}
+			throw err;
 		}
-		if (isAbort(err, request.signal)) {
-			return;
-		}
-		throw err;
 	}
 }
 
-async function runOnce(request: EvaChatRequest, temperature: number | undefined): Promise<void> {
+async function runOnce(request: EvaChatRequest, temperature: number | undefined, includeUsage: boolean): Promise<void> {
 	const url = `${trimSlash(request.baseUrl)}/chat/completions`;
 	const tools = wireTools(request.tools);
 
@@ -99,10 +128,13 @@ async function runOnce(request: EvaChatRequest, temperature: number | undefined)
 		messages: toWireMessages(request.messages),
 		stream: true,
 		max_tokens: request.maxOutputTokens,
-		// Without this the gateway omits `usage` from every frame; with it we get real token counts
-		// instead of having to estimate them.
-		stream_options: { include_usage: true },
 	};
+	// Without this the gateway omits `usage` from every frame; with it we get real token counts
+	// instead of having to estimate them. Omitted entirely when unsupported, rather than sent as
+	// false, because a server that rejects the key is unlikely to accept the value either.
+	if (includeUsage) {
+		body.stream_options = { include_usage: true };
+	}
 	if (typeof temperature === 'number') {
 		body.temperature = temperature;
 	}
@@ -113,7 +145,7 @@ async function runOnce(request: EvaChatRequest, temperature: number | undefined)
 	// Captured after the body is complete and before it is sent, so the log holds exactly what the
 	// gateway receives. This is the only route the Chat view and agent sessions take to EVA.
 	const span = beginTrace(readTraceConfig(), {
-		source: 'copilot',
+		source: request.source ?? 'copilot',
 		route: 'POST /chat/completions',
 		url,
 		model: request.model,
@@ -142,11 +174,16 @@ async function runOnce(request: EvaChatRequest, temperature: number | undefined)
 	if (!response.ok || !response.body) {
 		const text = await response.text().catch(() => '');
 		span?.fail(`HTTP ${response.status}：${text.slice(0, 300)}`, response.status);
+		// A self-hosted endpoint reports an unsupported `stream_options` as an ordinary 400, so the
+		// degradation has to be recognised here too and not only inside the 200 stream.
+		if (includeUsage && mentionsStreamOptions(text)) {
+			throw new RetryWithoutStreamOptions();
+		}
 		throw new Error(`EVA AI 网关返回 HTTP ${response.status}${response.status === 401 || response.status === 403 ? '（登录态已失效，请重新登录）' : ''}：${text.slice(0, 300)}`);
 	}
 
 	try {
-		await readStream(response, request.handlers, temperature !== undefined, span);
+		await readStream(response, request.handlers, temperature !== undefined, includeUsage, span);
 		span?.finish(response.status);
 	} catch (err) {
 		span?.fail(err, response.status);
@@ -154,7 +191,11 @@ async function runOnce(request: EvaChatRequest, temperature: number | undefined)
 	}
 }
 
-async function readStream(response: Response, handlers: EvaStreamHandlers, hadTemperature: boolean, span: EvaTraceSpan | undefined): Promise<void> {
+function mentionsStreamOptions(text: string): boolean {
+	return /stream_options|include_usage/i.test(text);
+}
+
+async function readStream(response: Response, handlers: EvaStreamHandlers, hadTemperature: boolean, includeUsage: boolean, span: EvaTraceSpan | undefined): Promise<void> {
 	const reader = response.body!.getReader();
 	const decoder = new TextDecoder();
 	const pending = new Map<number, { id: string; name: string; args: string }>();
@@ -191,6 +232,9 @@ async function readStream(response: Response, handlers: EvaStreamHandlers, hadTe
 				if (errorText) {
 					if (hadTemperature && /temperature/i.test(errorText)) {
 						throw new RetryWithoutTemperature();
+					}
+					if (includeUsage && mentionsStreamOptions(errorText)) {
+						throw new RetryWithoutStreamOptions();
 					}
 					throw new Error(`EVA AI 上游错误：${errorText}`);
 				}

@@ -8,7 +8,8 @@ import { EvaAuthService } from './evaAuth';
 import { EvaAuthenticationProvider } from './evaAuthProvider';
 import { readConfig, type EvaConfig } from './evaConfig';
 import { streamChat, type EvaUsage } from './evaChat';
-import { AUTO_MODEL_ID, describeModel, fetchModels, limitsFor, orderModels, type EvaModelCatalog } from './evaModels';
+import { AUTO_MODEL_ID, describeModel, fetchModels, isChatModelId, limitsFor, limitsForEndpoint, orderModels, type EvaModelCatalog } from './evaModels';
+import { ApiKeyResolver, EVA_VENDOR, readModelSources, type ModelSource } from './modelSources';
 import { EvaLocalProxy } from './evaProxy';
 import { readTraceConfig, setTraceDirectory, setTraceLogger } from './evaTrace';
 import { applyCliConfig, cliTargets, CLI_TIER_MODELS, restoreCliConfig, type CliModelSlots } from './evaCliConfig';
@@ -17,7 +18,7 @@ import { applyCliConfig, cliTargets, CLI_TIER_MODELS, restoreCliConfig, type Cli
  * Must match `contributes.languageModelChatProviders[].vendor` in package.json, otherwise the
  * provider never becomes visible to the model picker.
  */
-const VENDOR = 'eva-ai';
+const VENDOR = EVA_VENDOR;
 
 /** Must match `contributes.authentication[].id` in package.json. */
 const AUTH_PROVIDER_ID = 'eva';
@@ -58,9 +59,51 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 	context.subscriptions.push(authProvider);
 	context.subscriptions.push(vscode.authentication.registerAuthenticationProvider(AUTH_PROVIDER_ID, 'EVA', authProvider, { supportsMultipleAccounts: false }));
 
-	const provider = new EvaLanguageModelChatProvider(auth, readConfig);
+	const keys = new ApiKeyResolver(context.secrets);
+
+	/**
+	 * The EVA gateway. It is the only source whose availability depends on being logged in, and the
+	 * only one that knows its own default model - which is what makes its `Auto` entry meaningful.
+	 *
+	 * Its `baseUrl` is not read from here: the OAuth path resolves the address from settings on every
+	 * call, so repointing the gateway in settings takes effect without restarting the window.
+	 */
+	const evaSource: ModelSource = {
+		id: VENDOR,
+		label: 'EVA',
+		baseUrl: readConfig().aiBaseUrl,
+		auth: 'oauth',
+		apiKeyEnv: undefined,
+		staticApiKey: undefined,
+		models: [],
+	};
+
+	const provider = new EvaLanguageModelChatProvider(evaSource, keys, auth, readConfig);
 	context.subscriptions.push(provider);
 	context.subscriptions.push(vscode.lm.registerLanguageModelChatProvider(VENDOR, provider));
+
+	/**
+	 * BYOK sources each get their own provider, so they appear under their own vendor in the model
+	 * picker instead of all collapsing into "Eva AI".
+	 *
+	 * They are rebuilt whenever settings change, because a source can be added, removed or repointed
+	 * while the window is open. A source with no resolvable key registers anyway and simply reports
+	 * no models - that way the picker is empty rather than the source being impossible to configure.
+	 */
+	let byok: vscode.Disposable[] = [];
+	const syncByokSources = (): void => {
+		for (const disposable of byok) {
+			disposable.dispose();
+		}
+		byok = [];
+		for (const source of readModelSources()) {
+			const sourceProvider = new EvaLanguageModelChatProvider(source, keys, auth, readConfig);
+			byok.push(sourceProvider);
+			byok.push(vscode.lm.registerLanguageModelChatProvider(source.id, sourceProvider));
+		}
+	};
+	syncByokSources();
+	context.subscriptions.push({ dispose: () => { for (const disposable of byok) { disposable.dispose(); } } });
 
 	const proxy = new EvaLocalProxy(auth, context.globalState);
 	context.subscriptions.push(proxy);
@@ -205,9 +248,80 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 		vscode.window.showInformationMessage('已退出 Eva AI。');
 	}));
 
+	/**
+	 * Keys live in `SecretStorage` when set through this command, which is the only option that does
+	 * not leave them sitting in a file the user might commit. The environment variable remains the
+	 * default because that is where the keys on this machine already are.
+	 */
+	context.subscriptions.push(vscode.commands.registerCommand('eva-ai.setApiKey', async () => {
+		const sources = readModelSources();
+		if (!sources.length) {
+			vscode.window.showWarningMessage('没有配置任何模型来源。请先在设置里添加 `eva-ai.byok.sources` 条目。');
+			return;
+		}
+		const picked = await vscode.window.showQuickPick(
+			sources.map(source => ({ label: source.label, description: source.baseUrl, source })),
+			{ placeHolder: '要为哪个模型来源设置 API Key？' },
+		);
+		if (!picked) {
+			return;
+		}
+		const key = await vscode.window.showInputBox({
+			title: `${picked.source.label} 的 API Key`,
+			prompt: `写入安全存储（SecretStorage），不会存入 settings.json。环境变量 ${picked.source.apiKeyEnv ?? '（未配置）'} 存在时仍以安全存储为准。`,
+			password: true,
+			ignoreFocusOut: true,
+		});
+		if (!key) {
+			return;
+		}
+		await keys.store(picked.source.id, key.trim());
+		syncByokSources();
+		vscode.window.showInformationMessage(`已保存「${picked.source.label}」的 API Key。`);
+	}));
+
+	context.subscriptions.push(vscode.commands.registerCommand('eva-ai.clearApiKey', async () => {
+		const sources = readModelSources();
+		if (!sources.length) {
+			return;
+		}
+		const picked = await vscode.window.showQuickPick(
+			sources.map(source => ({ label: source.label, description: source.baseUrl, source })),
+			{ placeHolder: '要清除哪个模型来源已保存的 API Key？' },
+		);
+		if (!picked) {
+			return;
+		}
+		await keys.clear(picked.source.id);
+		syncByokSources();
+		vscode.window.showInformationMessage(`已清除「${picked.source.label}」保存的 API Key（环境变量不受影响）。`);
+	}));
+
+	/**
+	 * Answers the question a half-configured setup always leads to: is the key actually being found?
+	 * Reports where each key came from without ever printing the key itself.
+	 */
+	context.subscriptions.push(vscode.commands.registerCommand('eva-ai.showModelSources', async () => {
+		const sources = readModelSources();
+		if (!sources.length) {
+			vscode.window.showInformationMessage('没有配置任何自定义模型来源。');
+			return;
+		}
+		const lines: string[] = [];
+		for (const source of sources) {
+			const stored = await context.secrets.get(`eva-ai.apiKey.${source.id}`);
+			const fromEnv = source.apiKeyEnv ? process.env[source.apiKeyEnv] : undefined;
+			const origin = stored ? 'SecretStorage' : fromEnv ? `环境变量 ${source.apiKeyEnv}` : source.staticApiKey ? '设置项（明文）' : '未找到';
+			lines.push(`- ${source.label}（${source.id}）\n  端点：${source.baseUrl}\n  Key：${origin}`);
+		}
+		vscode.window.showInformationMessage(lines.join('\n'), { modal: true, detail: '密钥本身不会显示。' });
+	}));
+
 	context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(async e => {
 		if (e.affectsConfiguration('eva-ai')) {
+			keys.invalidate();
 			provider.refresh();
+			syncByokSources();
 		}
 	}));
 }
@@ -234,10 +348,15 @@ class EvaLanguageModelChatProvider implements vscode.LanguageModelChatProvider, 
 	private readonly authListener: vscode.Disposable;
 
 	constructor(
+		private readonly source: ModelSource,
+		private readonly keys: ApiKeyResolver,
 		private readonly auth: EvaAuthService,
 		private readonly getConfig: () => EvaConfig,
 	) {
-		this.authListener = auth.onDidChange(() => this.refresh());
+		// Only the EVA gateway's model list rises and falls with the login state. A BYOK source
+		// depends on nothing but its key, so watching the auth service would just refresh on
+		// unrelated sign-ins.
+		this.authListener = source.auth === 'oauth' ? auth.onDidChange(() => this.refresh()) : { dispose: () => { } };
 	}
 
 	dispose(): void {
@@ -284,6 +403,75 @@ class EvaLanguageModelChatProvider implements vscode.LanguageModelChatProvider, 
 		options: vscode.PrepareLanguageModelChatModelOptions,
 		_cancellationToken: vscode.CancellationToken,
 	): Promise<vscode.LanguageModelChatInformation[]> {
+		return this.source.auth === 'oauth'
+			? this.provideEvaModels(options)
+			: this.provideByokModels();
+	}
+
+	/**
+	 * Models from a source we hold a key for.
+	 *
+	 * Discovery is attempted first and falls back to the configured list rather than failing: a
+	 * self-hosted server that does not implement `/models` is still perfectly usable, and the user
+	 * listing what it serves is a legitimate way to tell us about it. When neither works the source
+	 * reports nothing, so a wrong address never blocks the rest of the picker.
+	 */
+	private async provideByokModels(): Promise<vscode.LanguageModelChatInformation[]> {
+		const source = this.source;
+		const apiKey = await this.keys.resolve(source);
+		if (!apiKey) {
+			return [];
+		}
+		const config = this.getConfig();
+
+		const key = `${source.id}|${source.baseUrl}|${source.models.join(',')}|${config.maxInputTokens}|${config.maxOutputTokens}`;
+		if (this.cachedModels && this.cacheKey === key) {
+			return [...this.cachedModels];
+		}
+
+		let ids: readonly string[] = source.models;
+		if (!ids.length) {
+			try {
+				const catalog = await fetchModels(source.baseUrl, apiKey);
+				ids = catalog.ids;
+			} catch (err) {
+				vscode.window.showErrorMessage(`无法读取「${source.label}」的模型清单：${errorMessage(err)}`);
+				return [];
+			}
+		}
+
+		// No Auto entry here: only the EVA gateway tells us what its own default is, and inventing a
+		// "let us pick" entry for a source we know nothing else about would be a guess.
+		const ordered = orderModels(ids.filter(isChatModelId), '', undefined);
+		const models: vscode.LanguageModelChatInformation[] = ordered.map(id => {
+			const description = describeModel(id);
+			const limits = limitsForEndpoint(source.baseUrl, id, config);
+			return {
+				id,
+				name: description.name,
+				family: description.family,
+				version: MODEL_VERSION,
+				detail: description.detail,
+				tooltip: `${description.tooltip}\n\n来源：${source.label}\n端点：${source.baseUrl}`,
+				maxInputTokens: limits.maxInputTokens,
+				maxOutputTokens: limits.maxOutputTokens,
+				capabilities: {
+					// Vision is claimed for no BYOK model: none of these endpoints publish per-model
+					// capabilities, and a vision claim that fails at request time looks like a broken
+					// extension. Declare it per model once an endpoint can be asked.
+					imageInput: false,
+					toolCalling: true,
+				},
+				isBYOK: true,
+			} satisfies EvaModelInformation;
+		});
+
+		this.cacheKey = key;
+		this.cachedModels = models;
+		return [...models];
+	}
+
+	private async provideEvaModels(options: vscode.PrepareLanguageModelChatModelOptions): Promise<vscode.LanguageModelChatInformation[]> {
 		const config = this.getConfig();
 
 		const accessToken = await this.ensureAccessToken(options.silent);
@@ -392,6 +580,24 @@ class EvaLanguageModelChatProvider implements vscode.LanguageModelChatProvider, 
 		return session.accessToken;
 	}
 
+	/**
+	 * The key for a BYOK source, or a message naming the exact places it can be put.
+	 *
+	 * This is a request-time failure rather than a registration-time one on purpose: the picker
+	 * samples sources constantly, and a source should stay visible (and configurable) even while its
+	 * key is missing - only actually using it needs the key.
+	 */
+	private async requireApiKey(): Promise<string> {
+		const key = await this.keys.resolve(this.source);
+		if (!key) {
+			const where = this.source.apiKeyEnv
+				? `环境变量 ${this.source.apiKeyEnv}`
+				: '设置项 `eva-ai.byok.sources` 的 apiKey / apiKeyEnv';
+			throw new Error(`「${this.source.label}」没有可用的 API Key。请在 ${where} 中配置，或运行「Eva AI: 设置 API Key」写入安全存储。`);
+		}
+		return key;
+	}
+
 	async provideLanguageModelChatResponse(
 		model: vscode.LanguageModelChatInformation,
 		messages: readonly vscode.LanguageModelChatRequestMessage[],
@@ -400,7 +606,12 @@ class EvaLanguageModelChatProvider implements vscode.LanguageModelChatProvider, 
 		token: vscode.CancellationToken,
 	): Promise<void> {
 		const config = this.getConfig();
-		const accessToken = await this.requestAccessToken();
+		const accessToken = this.source.auth === 'oauth'
+			? await this.requestAccessToken()
+			: await this.requireApiKey();
+		// The EVA address stays configurable per request; every other source uses the one it was
+		// configured with, which is the whole point of declaring it.
+		const baseUrl = this.source.auth === 'oauth' ? config.aiBaseUrl : this.source.baseUrl;
 
 		const controller = new AbortController();
 		const listener = token.onCancellationRequested(() => controller.abort());
@@ -408,15 +619,16 @@ class EvaLanguageModelChatProvider implements vscode.LanguageModelChatProvider, 
 		this.promptChars.set(targetId, JSON.stringify(messages).length);
 		try {
 			await streamChat({
-				baseUrl: config.aiBaseUrl,
+				baseUrl,
 				token: accessToken,
+				source: this.source.id,
 				model: targetId,
 				messages,
 				tools: options.tools,
 				temperature: config.temperature,
-				// Per model, from the limits measured against eva-ai: asking for more than the service
-				// allows is a hard 400 ("Range of max_tokens should be [1, N]").
-				maxOutputTokens: limitsFor(targetId, config).maxOutputTokens,
+				// Per model and per endpoint: asking for more than the service allows is a hard 400
+				// ("Range of max_tokens should be [1, N]").
+				maxOutputTokens: limitsForEndpoint(baseUrl, targetId, config).maxOutputTokens,
 				signal: controller.signal,
 				handlers: {
 					onText: text => progress.report(new vscode.LanguageModelTextPart(text)),
